@@ -16,3 +16,21 @@ eval (IfExp b e1 e2) = if eval b then eval e1 else eval e2
 
 example_prog : Nat
 example_prog = eval (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tnat} 2))
+
+StackType : Type
+StackType = List TyExp
+
+data Stack : StackType -> Type where
+    Nil : Stack []
+    (::) : Val t -> Stack s -> Stack (t :: s)
+
+top : (s : Stack (t :: s')) -> Val t
+top (head :: _) = head
+
+data Code : (s, s' : StackType) -> Type where
+    Skip : Code s s'
+    (++) : (c1 : Code s0 s1) -> (c2 : Code s1 s2) -> Code s0 s2
+    PUSH : (v : Val t) -> Code s (t :: s)
+    ADD : Code (Tnat :: Tnat :: s) (Tnat :: s)
+    IF : (c1, c2 : Code s s') -> Code (Tbool :: s) s'
+
