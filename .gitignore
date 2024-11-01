@@ -115,3 +115,5 @@ tags
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,idris,visualstudiocode,emacs,vim
+
+.direnv
