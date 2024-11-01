@@ -20,17 +20,27 @@ example_prog = eval (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tna
 StackType : Type
 StackType = List TyExp
 
-data Stack : StackType -> Type where
+infixr 10 |> 
+
+data Stack : (s: StackType) -> Type where
     Nil : Stack []
-    (::) : Val t -> Stack s -> Stack (t :: s)
+    (|>) : Val t -> Stack s -> Stack (t :: s)
 
 top : (s : Stack (t :: s')) -> Val t
-top (head :: _) = head
+top (head |> _) = head
 
 data Code : (s, s' : StackType) -> Type where
-    Skip : Code s s'
+    Skip : Code s s
     (++) : (c1 : Code s0 s1) -> (c2 : Code s1 s2) -> Code s0 s2
     PUSH : (v : Val t) -> Code s (t :: s)
     ADD : Code (Tnat :: Tnat :: s) (Tnat :: s)
     IF : (c1, c2 : Code s s') -> Code (Tbool :: s) s'
 
+exec : (Code s s') -> (Stack s) -> (Stack s')
+exec Skip s = s
+exec (c1 ++ c2) s = exec c2 (exec c1 s)
+exec (PUSH v) s = v |> s
+exec ADD (n |> m |> s) = (n + m) |> s 
+exec (IF c1 c2) (False |> s) = exec c1 s
+exec (IF c1 c2) (True |> s) = exec c2 s
+ 
