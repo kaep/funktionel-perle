@@ -13,3 +13,6 @@ eval : Exp t -> Val t
 eval (ValExp v) = v 
 eval (PlusExp e1 e2) = eval e1 + eval e2
 eval (IfExp b e1 e2) = if eval b then eval e1 else eval e2
+
+example_prog : Nat
+example_prog = eval (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tnat} 2))
