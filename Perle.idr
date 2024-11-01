@@ -1,9 +1,5 @@
 data TyExp = Tnat | Tbool
 
--- data Val : TyExp -> Type where
---     ValNat : Val Tnat -> Nat
---     ValBool : Val Tbool -> Bool
-
 Val : TyExp -> Type
 Val Tnat = Nat
 Val Tbool = Bool
