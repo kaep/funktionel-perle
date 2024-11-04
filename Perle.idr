@@ -10,7 +10,7 @@ data Exp : TyExp -> Type where
     IfExp : (b : Exp Tbool) -> (e1 : Exp t) -> (e2 : Exp t) -> Exp t
 
 eval : Exp t -> Val t
-eval (ValExp v) = v 
+eval (ValExp v) = v
 eval (PlusExp e1 e2) = eval e1 + eval e2
 eval (IfExp b e1 e2) = if eval b then eval e1 else eval e2
 
@@ -21,11 +21,11 @@ StackType : Type
 StackType = List TyExp
 
 
-infixr 10 |> 
+infixr 10 |>
 data Stack : (s: StackType) -> Type where
     Nil : Stack []
     (|>) : Val t -> Stack s -> Stack (t :: s)
-  
+
 SCons : Val t -> Stack s -> Stack (t :: s)
 SCons = (|>)
 
@@ -43,23 +43,23 @@ exec : (Code s s') -> (Stack s) -> (Stack s')
 exec Skip s = s
 exec (c1 ++ c2) s = exec c2 (exec c1 s)
 exec (PUSH v) s = v |> s
-exec ADD (n |> m |> s) = (n + m) |> s 
-exec (IF c1 c2) (False |> s) = exec c1 s
-exec (IF c1 c2) (True |> s) = exec c2 s
+exec ADD (n |> m |> s) = (n + m) |> s
+exec (IF c1 c2) (True |> s) = exec c1 s
+exec (IF c1 c2) (False |> s) = exec c2 s
 
-  
+
 compile : (Exp t) -> Code s (t :: s)
 compile (ValExp v) = PUSH v
 compile (PlusExp e1 e2) = compile e2 ++ compile e1 ++ ADD
 compile (IfExp b e1 e2) = (compile b) ++ (IF (compile e1) (compile e2))
-  
-  
+
+
 
 mutual
   trans_eval_compile : eval e1 |> (eval e2 |> s) = exec (compile e1) (exec (compile e2) s)
-  trans_eval_compile {e1} {e2} {s} = 
+  trans_eval_compile {e1} {e2} {s} =
     let e2eval = (eval e2) |> s in
-    let lhs = correct e1 e2eval in 
+    let lhs = correct e1 e2eval in
     let rhs = cong {f = \s' => exec (compile e1) s'} (correct e2 s) in
     trans lhs rhs
 
@@ -69,7 +69,16 @@ mutual
   correct (PlusExp e1 e2) s =
     let exec_add = cong {f = \s' => exec ADD s'} (trans_eval_compile {s = s}) in
     trans Refl exec_add
-  correct (IfExp b e1 e2) s = ?correct_rhs_3
+  correct (IfExp b et ef) s =
+    trans h1 h2
+    where
+      h1 : (if eval b then eval et else eval ef) |> s =
+           exec (IF (compile et) (compile ef)) (eval b |> s)
+      h1 with (eval b)
+        | True = correct et s
+        | False = correct ef s
 
-
-  
+      h2 : exec (IF (compile et) (compile ef)) (eval b |> s) =
+           exec (IF (compile et) (compile ef)) (exec (compile b) s)
+      h2 = 
+        cong {f = \s' => exec (IF (compile et) (compile ef)) s'} (correct b s)
