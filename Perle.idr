@@ -1,3 +1,4 @@
+%default total
 data TyExp = Tnat | Tbool
 
 Val : TyExp -> Type
