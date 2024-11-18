@@ -49,10 +49,10 @@ mutual
         HALT : Code s s
         SKIP : Code s s
         (++) : (c1 : Code s1 s2) -> (c2 : Code s2 s3) -> Code s1 s3
-        PUSH : (v : Val t) -> Code s ((stack_type t) :: s)
-        ADD : Code (TEnat :: TEnat :: s) (TEnat :: s)
-        IF : (c1, c2 : Code s s') -> Code (TEbool :: s) s'
-        SUB : Code (TEnat :: TEnat :: s) (TEnat :: s)
+        PUSH : (v : El t) -> Code s (t :: s)
+        ADD : Code (Enat :: Enat :: s) (Enat :: s)
+        IF : (c1, c2 : Code s s') -> Code (Ebool :: s) s'
+        SUB : Code (Enat :: Enat :: s) (Enat :: s)
         MARK : (c1 : Code s1 s2) -> (c2: Code s3 s4) -> Code s s
         UNMARK : (c1 : Code s1 s2) -> Code s s
 
