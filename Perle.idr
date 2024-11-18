@@ -20,37 +20,54 @@ eval (SubExp e1 e2) = minus (eval e1) (eval e2)
 example_prog : Nat
 example_prog = eval (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tnat} 2))
 
-StackType : Type
-StackType = List TyExp
 
 
-infixr 10 |>
-data Stack : (s: StackType) -> Type where
-    Nil : Stack []
-    (|>) : Val t -> Stack s -> Stack (t :: s)
+mutual 
 
-SCons : Val t -> Stack s -> Stack (t :: s)
-SCons = (|>)
+    data Ty : Type where
+      Enat : Ty
+      Ebool : Ty
+      Ehan : StackType -> StackType -> Ty
+    
+    El : Ty -> Type
+    El Enat = Nat
+    El Ebool = Bool
+    El (Ehan s s') = Code s s'
 
-top : (s : Stack (t :: s')) -> Val t
-top (head |> _) = head
+    StackType : Type
+    StackType = List Ty
 
-data Code : (s, s' : StackType) -> Type where
-    Skip : Code s s
-    (++) : (c1 : Code s0 s1) -> (c2 : Code s1 s2) -> Code s0 s2
-    PUSH : (v : Val t) -> Code s (t :: s)
-    ADD : Code (Tnat :: Tnat :: s) (Tnat :: s)
-    IF : (c1, c2 : Code s s') -> Code (Tbool :: s) s'
-    SUB : Code (Tnat :: Tnat :: s) (Tnat :: s)
+    infixr 10 |>
+    data Stack : (s: StackType) -> Type where
+        Nil : Stack []
+        (|>) : El t -> Stack s -> Stack (t :: s)
+
+
+    data Elem = CST (Val t) | HAN (Code s s')
+
+    data Code : (s, s' : StackType) -> Type where
+        HALT : Code s s
+        SKIP : Code s s
+        (++) : (c1 : Code s1 s2) -> (c2 : Code s2 s3) -> Code s1 s3
+        PUSH : (v : Val t) -> Code s ((stack_type t) :: s)
+        ADD : Code (TEnat :: TEnat :: s) (TEnat :: s)
+        IF : (c1, c2 : Code s s') -> Code (TEbool :: s) s'
+        SUB : Code (TEnat :: TEnat :: s) (TEnat :: s)
+        MARK : (c1 : Code s1 s2) -> (c2: Code s3 s4) -> Code s s
+        UNMARK : (c1 : Code s1 s2) -> Code s s
+
 
 exec : (Code s s') -> (Stack s) -> (Stack s')
-exec Skip s = s
+exec HALT s = s
+exec SKIP s = s
 exec (c1 ++ c2) s = exec c2 (exec c1 s)
 exec (PUSH v) s = v |> s
 exec ADD (n |> m |> s) = (n + m) |> s
 exec (IF c1 c2) (True |> s) = exec c1 s
 exec (IF c1 c2) (False |> s) = exec c2 s
 exec SUB (n |> m |> s) = (minus n m) |> s
+exec (MARK c1 c2) s = ?m
+exec (UNMARK c1) s = ?um
 
 
 compile : (Exp t) -> Code s (t :: s)
@@ -59,7 +76,7 @@ compile (PlusExp e1 e2) = compile e2 ++ compile e1 ++ ADD
 compile (IfExp b e1 e2) = (compile b) ++ (IF (compile e1) (compile e2))
 compile (SubExp e1 e2) = compile e2 ++ compile e1 ++ SUB
 
-
+{-
 
 mutual
   trans_eval_compile : eval e1 |> (eval e2 |> s) = exec (compile e1) (exec (compile e2) s)
@@ -91,3 +108,5 @@ mutual
   correct (SubExp e1 e2) s = 
     let exec_sub = cong {f = \s' => exec SUB s'} (trans_eval_compile {s = s}) in
     trans Refl exec_sub
+
+-}
