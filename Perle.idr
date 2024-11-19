@@ -1,4 +1,4 @@
-%default total
+--%default total
 data TyExp = Tnat | Tbool
 
 Val : TyExp -> Type
@@ -53,31 +53,37 @@ mutual
         ADD : Code (Enat :: Enat :: s) (Enat :: s)
         IF : (c1, c2 : Code s s') -> Code (Ebool :: s) s'
         SUB : Code (Enat :: Enat :: s) (Enat :: s)
-        MARK : (c1 : Code s1 s2) -> (c2: Code s3 s4) -> Code s s
-        UNMARK : (c1 : Code s1 s2) -> Code s s
+        MARK : (h : Code s s') -> (c: Code (Ehan s s' :: s) s') -> Code s s'
+        UNMARK : Code (t :: s) s' -> Code (t :: Ehan s s' :: s) s'
+        THROW : Code (s'' ++ Ehan s s' :: s) s'
+       
 
-
-exec : (Code s s') -> (Stack s) -> (Stack s')
-exec HALT s = s
-exec SKIP s = s
-exec (c1 ++ c2) s = exec c2 (exec c1 s)
-exec (PUSH v) s = v |> s
-exec ADD (n |> m |> s) = (n + m) |> s
-exec (IF c1 c2) (True |> s) = exec c1 s
-exec (IF c1 c2) (False |> s) = exec c2 s
-exec SUB (n |> m |> s) = (minus n m) |> s
-exec (MARK c1 c2) s = ?m
-exec (UNMARK c1) s = ?um
-
-
+ 
+    exec : (Code s s') -> (Stack s) -> (Stack s')
+    exec HALT s = s
+    exec SKIP s = s
+    exec (c1 ++ c2) s = exec c2 (exec c1 s)
+    exec (PUSH v) s = v |> s
+    exec ADD (n |> m |> s) = (n + m) |> s
+    exec (IF c1 c2) (True |> s) = exec c1 s
+    exec (IF c1 c2) (False |> s) = exec c2 s
+    exec SUB (n |> m |> s) = (minus n m) |> s
+    exec (MARK h c) s = exec c (h |> s)
+    exec (UNMARK c) (x |> _ |> s) = exec c (x |> s)
+    exec THROW stakken = ?hs
+  
+    fejl : Stack (s'' ++ (Ehan s s' :: s)) 
+    --Stack (s'' List.(++) Ehan s s' List:: s) -> Stack s'
+    --fejl {s'' = []} (h' |> stack) = exec h' stack
+    --fejl {s'' = _::_} (n |> stack) = fejl stack
+{-
 compile : (Exp t) -> Code s (t :: s)
 compile (ValExp v) = PUSH v
 compile (PlusExp e1 e2) = compile e2 ++ compile e1 ++ ADD
 compile (IfExp b e1 e2) = (compile b) ++ (IF (compile e1) (compile e2))
 compile (SubExp e1 e2) = compile e2 ++ compile e1 ++ SUB
-
+-}
 {-
-
 mutual
   trans_eval_compile : eval e1 |> (eval e2 |> s) = exec (compile e1) (exec (compile e2) s)
   trans_eval_compile {e1} {e2} {s} =
