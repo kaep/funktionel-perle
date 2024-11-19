@@ -1,24 +1,45 @@
---%default total
+%default total
 data TyExp = Tnat | Tbool
 
 Val : TyExp -> Type
 Val Tnat = Nat
 Val Tbool = Bool
 
-data Exp : TyExp -> Type where
-    ValExp : (v : Val t) -> Exp t
-    PlusExp : (e1 : Exp Tnat) -> (e2 : Exp Tnat) -> Exp Tnat
-    IfExp : (b : Exp Tbool) -> (e1 : Exp t) -> (e2 : Exp t) -> Exp t
-    SubExp : (e1 : Exp Tnat) -> (e2 : Exp Tnat) -> Exp Tnat
+data Exp : TyExp -> Bool -> Type where
+    ValExp : (v : Val t) -> Exp t False
+    PlusExp : (e1 : Exp Tnat throws_a) -> (e2 : Exp Tnat throws_b) -> Exp Tnat (throws_a || throws_b)
+    IfExp : (b : Exp Tbool throws_a) -> (e1 : Exp t throws_b) -> (e2 : Exp t throws_c) -> Exp t (throws_a || throws_b || throws_c)
+    Throw : Exp t True
+    Catch : Exp t throws_a -> Exp t throws_b -> Exp t (throws_a && throws_b)
 
-eval : Exp t -> Val t
+evalM : Exp t _ -> Maybe (Val t)
+evalM (ValExp v) = Just v
+evalM (PlusExp e1 e2) = Just (!(evalM e1) + !(evalM e2))
+evalM (IfExp b e1 e2) = if !(evalM b) then evalM e1 else evalM e2
+evalM Throw = Nothing
+evalM (Catch x h) = maybe (evalM h) (Just) (evalM x)
+
+
+eval : {auto prf : b = False} -> Exp t b -> Val t
+eval {prf} Throw = absurd prf
 eval (ValExp v) = v
-eval (PlusExp e1 e2) = eval e1 + eval e2
-eval (IfExp b e1 e2) = if eval b then eval e1 else eval e2
-eval (SubExp e1 e2) = minus (eval e1) (eval e2)
+eval (PlusExp {throws_a = False} {throws_b = False} e1 e2) = eval e1 + eval e2
+eval (IfExp {throws_a = False} {throws_b = False} {throws_c = False} b e1 e2) = if eval b then eval e1 else eval e2
+eval (Catch {throws_a = False} {throws_b} x y) = eval x
+eval (Catch {throws_a = True} {throws_b = False} x h) = maybe (eval h) (id) (evalM x)
 
-example_prog : Nat
-example_prog = eval (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tnat} 2))
+--example_progtc : Maybe Nat
+--example_progtc = evalM (Catch {t = Tnat} 
+--                        (PlusExp {throws_b = False} (ValExp {t = Tnat} 6) (Throw))
+--                        (ValExp {t = Tnat} 3)
+--                       )
+
+-- example_prog : Maybe Nat
+-- example_prog = eval (IfExp (ValExp False) (ValExp {t = Tnat} 3) 
+--                                           (Catch {t = Tnat}
+--                                             (PlusExp (ValExp {t = Tnat} 6) (Throw))
+--                                             (ValExp {t = Tnat} 3)
+--                                            ))
 
 
 
@@ -33,7 +54,7 @@ mutual
     El Enat = Nat
     El Ebool = Bool
     El (Ehan s s') = Code s s'
-
+    
     StackType : Type
     StackType = List Ty
 
@@ -47,43 +68,45 @@ mutual
 
     data Code : (s, s' : StackType) -> Type where
         HALT : Code s s
-        SKIP : Code s s
-        (++) : (c1 : Code s1 s2) -> (c2 : Code s2 s3) -> Code s1 s3
-        PUSH : (v : El t) -> Code s (t :: s)
-        ADD : Code (Enat :: Enat :: s) (Enat :: s)
-        IF : (c1, c2 : Code s s') -> Code (Ebool :: s) s'
-        SUB : Code (Enat :: Enat :: s) (Enat :: s)
+        PUSH : (v : El t) -> Code (t :: s) s' -> Code s s'
+        ADD : Code (Enat :: s) s' -> Code (Enat :: Enat :: s) s'
+        IF : Code s s' -> Code s s' -> Code (Ebool :: s) s'
         MARK : (h : Code s s') -> (c: Code (Ehan s s' :: s) s') -> Code s s'
         UNMARK : Code (t :: s) s' -> Code (t :: Ehan s s' :: s) s'
         THROW : Code (s'' ++ Ehan s s' :: s) s'
        
-
+mutual 
  
+    partial
     exec : (Code s s') -> (Stack s) -> (Stack s')
-    exec HALT s = s
-    exec SKIP s = s
-    exec (c1 ++ c2) s = exec c2 (exec c1 s)
-    exec (PUSH v) s = v |> s
-    exec ADD (n |> m |> s) = (n + m) |> s
+    exec HALT st = st
+    exec (PUSH v c) st = exec c (v |> st)
+    exec (ADD c) (n |> m |> st) = exec c ((n + m) |> st)
     exec (IF c1 c2) (True |> s) = exec c1 s
     exec (IF c1 c2) (False |> s) = exec c2 s
-    exec SUB (n |> m |> s) = (minus n m) |> s
     exec (MARK h c) s = exec c (h |> s)
     exec (UNMARK c) (x |> _ |> s) = exec c (x |> s)
-    exec THROW stakken = ?hs
+    exec THROW stakken = fejl stakken
   
-    fejl : Stack (s'' ++ (Ehan s s' :: s)) 
-    --Stack (s'' List.(++) Ehan s s' List:: s) -> Stack s'
-    --fejl {s'' = []} (h' |> stack) = exec h' stack
-    --fejl {s'' = _::_} (n |> stack) = fejl stack
+    partial     
+    fejl : Stack (s'' ++ (Ehan s s' :: s)) -> Stack s'
+    fejl {s'' = []} (h' |> stack) = exec h' stack
+    fejl {s'' = _::_} (n |> stack) = fejl stack
+  
+  
+comp : Exp _ _ -> Code (t :: (s'' ++ Ehan s s' :: s)) s' -> Code (s'' ++ Ehan s s' :: s) s'
+--comp (ValExp v) c = PUSH v c
+--comp (PlusExp e1 e2) y = ?comp_rhs_2
+--comp (IfExp b e1 e2) y = ?comp_rhs_3
+
 {-
-compile : (Exp t) -> Code s (t :: s)
+
+compile : (Exp t _) -> Code s (t :: s)
 compile (ValExp v) = PUSH v
 compile (PlusExp e1 e2) = compile e2 ++ compile e1 ++ ADD
 compile (IfExp b e1 e2) = (compile b) ++ (IF (compile e1) (compile e2))
 compile (SubExp e1 e2) = compile e2 ++ compile e1 ++ SUB
--}
-{-
+
 mutual
   trans_eval_compile : eval e1 |> (eval e2 |> s) = exec (compile e1) (exec (compile e2) s)
   trans_eval_compile {e1} {e2} {s} =
