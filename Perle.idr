@@ -8,25 +8,25 @@ Val Tbool = Bool
 data Exp : TyExp -> Bool -> Type where
     ValExp : (v : Val t) -> Exp t False
     PlusExp : (e1 : Exp Tnat throws_a) -> (e2 : Exp Tnat throws_b) -> Exp Tnat (throws_a || throws_b)
-    IfExp : (b : Exp Tbool throws_a) -> (e1 : Exp t throws_b) -> (e2 : Exp t throws_c) -> Exp t (throws_a || throws_b || throws_c)
     Throw : Exp t True
     Catch : Exp t throws_a -> Exp t throws_b -> Exp t (throws_a && throws_b)
 
 evalM : Exp t _ -> Maybe (Val t)
 evalM (ValExp v) = Just v
 evalM (PlusExp e1 e2) = Just (!(evalM e1) + !(evalM e2))
-evalM (IfExp b e1 e2) = if !(evalM b) then evalM e1 else evalM e2
 evalM Throw = Nothing
 evalM (Catch x h) = maybe (evalM h) (Just) (evalM x)
 
-
 eval : {auto prf : b = False} -> Exp t b -> Val t
-eval {prf} Throw = absurd prf
+eval {prf = Refl} Throw impossible
 eval (ValExp v) = v
 eval (PlusExp {throws_a = False} {throws_b = False} e1 e2) = eval e1 + eval e2
-eval (IfExp {throws_a = False} {throws_b = False} {throws_c = False} b e1 e2) = if eval b then eval e1 else eval e2
-eval (Catch {throws_a = False} {throws_b} x y) = eval x
+eval {prf} (PlusExp {throws_a = False} {throws_b = True} e1 e2) = absurd prf
+eval {prf} (PlusExp {throws_a = True} {throws_b = False} e1 e2) = absurd prf
+eval {prf} (PlusExp {throws_a = True} {throws_b = True} e1 e2) = absurd prf
+eval (Catch {throws_a = False} x h) = eval x
 eval (Catch {throws_a = True} {throws_b = False} x h) = maybe (eval h) (id) (evalM x)
+eval {prf} (Catch {throws_a = True} {throws_b = True} x h) = absurd prf
 
 --example_progtc : Maybe Nat
 --example_progtc = evalM (Catch {t = Tnat} 
@@ -47,12 +47,10 @@ mutual
 
     data Ty : Type where
       Enat : Ty
-      Ebool : Ty
       Ehan : StackType -> StackType -> Ty
     
     El : Ty -> Type
     El Enat = Nat
-    El Ebool = Bool
     El (Ehan s s') = Code s s'
     
     StackType : Type
@@ -70,25 +68,20 @@ mutual
         HALT : Code s s
         PUSH : (v : El t) -> Code (t :: s) s' -> Code s s'
         ADD : Code (Enat :: s) s' -> Code (Enat :: Enat :: s) s'
-        IF : Code s s' -> Code s s' -> Code (Ebool :: s) s'
         MARK : (h : Code s s') -> (c: Code (Ehan s s' :: s) s') -> Code s s'
         UNMARK : Code (t :: s) s' -> Code (t :: Ehan s s' :: s) s'
         THROW : Code (s'' ++ Ehan s s' :: s) s'
        
 mutual 
  
-    partial
     exec : (Code s s') -> (Stack s) -> (Stack s')
     exec HALT st = st
     exec (PUSH v c) st = exec c (v |> st)
     exec (ADD c) (n |> m |> st) = exec c ((n + m) |> st)
-    exec (IF c1 c2) (True |> s) = exec c1 s
-    exec (IF c1 c2) (False |> s) = exec c2 s
     exec (MARK h c) s = exec c (h |> s)
     exec (UNMARK c) (x |> _ |> s) = exec c (x |> s)
     exec THROW stakken = fejl stakken
   
-    partial     
     fejl : Stack (s'' ++ (Ehan s s' :: s)) -> Stack s'
     fejl {s'' = []} (h' |> stack) = exec h' stack
     fejl {s'' = _::_} (n |> stack) = fejl stack
