@@ -1,22 +1,22 @@
 %default total
 data TyExp = TNat
 
-Val : TyExp -> Type
-Val TNat = Nat
+TyVal : TyExp -> Type
+TyVal TNat = Nat
 
 data Exp : TyExp -> Bool -> Type where
-    ValExp : (v : Val t) -> Exp t False
+    ValExp : (v : TyVal t) -> Exp t False
     PlusExp : (e1 : Exp TNat throws_a) -> (e2 : Exp TNat throws_b) -> Exp TNat (throws_a || throws_b)
     Throw : Exp t True
     Catch : Exp t throws_a -> Exp t throws_b -> Exp t (throws_a && throws_b)
 
-evalM : Exp t _ -> Maybe (Val t)
+evalM : Exp t _ -> Maybe (TyVal t)
 evalM (ValExp v) = Just v
 evalM (PlusExp e1 e2) = Just (!(evalM e1) + !(evalM e2))
 evalM Throw = Nothing
 evalM (Catch x h) = maybe (evalM h) (Just) (evalM x)
 
-eval : {auto prf : b = False} -> Exp t b -> Val t
+eval : {auto prf : b = False} -> Exp t b -> TyVal t
 eval {prf = Refl} Throw impossible
 eval (ValExp v) = v
 eval (PlusExp {throws_a = False} {throws_b = False} e1 e2) = eval e1 + eval e2
@@ -26,64 +26,83 @@ eval {prf} (PlusExp {throws_a = True} {throws_b = True} e1 e2) = absurd prf
 eval (Catch {throws_a = False} x h) = eval x
 eval (Catch {throws_a = True} {throws_b = False} x h) = maybe (eval h) (id) (evalM x)
 eval {prf} (Catch {throws_a = True} {throws_b = True} x h) = absurd prf
-  
-  
-data Ty : Type where
-  EValue : TyExp -> Ty
-  EHandler : TyExp -> Ty
+
+data Item = Val u | Han u
 
 StackType : Type
-StackType = List Ty
+StackType = List Item
+
+data Stack : StackType -> Type where
+  Nil : Stack []
+  Cons : TyVal t -> Stack s -> Stack (Val t :: s)
+  HanCons: Stack s -> Stack (Han t :: s)
+
+data Path : (t -> t -> Type) -> t -> t -> Type where
+  Empty : Path g i i
+  (::)  : g i j -> Path g j k -> Path g i k
+
+(++) : Path g i j -> Path g j k -> Path g i k
+(++) Empty ys = ys
+(++) (x :: xs) ys = x :: (xs ++ ys)
+
 
 mutual
-    data Op : (s, s' : StackType) -> Type where
-      PUSH   : (v : Val t) -> Op s (EValue t :: s)
-      ADD    : Op (EValue TNat :: EValue TNat :: s) (EValue TNat :: s)
-      MARK   : Op s (EHandler t :: s)
-      UNMARK : Code s (EValue t :: s) -> Op (EValue t :: EHandler t :: s) (EValue t :: s)
-      THROW  : Op s (EValue t :: s)
+    data Op : StackType -> StackType -> Type where
+        PUSH : TyVal t -> Op s (Val t :: s)
+        ADD : Op ((Val TNat) :: (Val TNat) :: s) (Val TNat :: s)
+        MARK : Op s (Han u :: s)
+        UNMARK : Code s (Val u :: s) -> Op (Val u :: Han u :: s) (Val u :: s)
+        THROW : Op s (Val u :: s)
 
     Code : (s, s' : StackType) -> Type
-    Code s s' = List (Op s s')
+    Code = Path Op
 
-infixr 10 |>
-data Stack : (s: StackType) -> Type where
-    Nil  : Stack []
-    (|>) : Val t -> Stack s -> Stack (EValue t :: s)
-    Han  : Stack s -> Stack (EHandler t :: s)
+unwindShape : StackType -> Nat -> StackType
+unwindShape (Han _ :: xs) Z = xs
+unwindShape (Han _ :: xs) (S n) = unwindShape xs n
+unwindShape (Val _ :: xs) n = unwindShape xs n
+unwindShape [] _ = []
+
+unwindStack : Stack s -> (n : Nat) -> Stack (unwindShape s n)
+unwindStack (HanCons xs) Z = xs
+unwindStack (HanCons xs) (S n) = unwindStack xs n
+unwindStack (Cons _ xs) n = unwindStack xs n
+unwindStack Nil _ = Nil
+
+data State : StackType -> Type where
+    Normal : Stack s -> State s
+    Exceptional : (n : Nat) -> Stack (unwindShape s n) -> State s
+
+mutual
+
+    execInstr : Op s s' -> State s -> State s'
+
+    execInstr ADD (Normal (Cons x (Cons y st))) = Normal (Cons (x + y) st)
+    execInstr (UNMARK _) (Normal (Cons x (HanCons st))) = Normal (Cons x st)
+    execInstr (PUSH x) (Normal st) = Normal (Cons x st)
+    execInstr MARK (Normal st) = Normal (HanCons st)
+
+    execInstr THROW (Normal st) = Exceptional Z (unwindStack st Z)
+
+    execInstr MARK (Exceptional n st) = Exceptional (S n) st
+    execInstr (UNMARK _) (Exceptional (S n) st) = Exceptional n st
+    execInstr (UNMARK h) (Exceptional Z st) = execCode h (Normal st)
+
+    execInstr THROW (Exceptional n st) = Exceptional n st
+    execInstr ADD (Exceptional n st) = Exceptional n st
+    execInstr (PUSH _) (Exceptional n st) = Exceptional n st
 
 
-unwindStackType : Nat -> StackType -> StackType
-unwindStackType Z     (EHandler _ :: st) = st
-unwindStackType (S n) (EHandler _ :: st) = unwindStackType n st
-unwindStackType n     (EValue _   :: st) = unwindStackType n st
-unwindStackType _     [] = []
+    execCode : Code s s' -> State s -> State s'
+    execCode Empty st = st
+    execCode (i :: is) st = execCode is (execInstr i st)
 
+sc : Op s s' -> Code s s'
+sc op = op :: Empty 
 
-data Execution : (s : StackType) -> Type where
-    Run  : Stack s -> Execution s
-    Exception : (n : Nat) -> Stack (unwindStackType n s) -> Execution s
-  
-execOp : (Op s s') -> (Execution s) -> (Execution s')
-execOp (PUSH v) (Run st) = Run $ v |> st
-execOp ADD (Run $ n1 |> n2 |> st) = Run $ (n1 + n2) |> st
-execOp MARK (Run st) = Run $ Han st 
-execOp (UNMARK _) (Run $ c |> Han st) = Run $ c |> st
-
-execOp THROW (Run st) = Exception Z ?unwindStack
-
-execOp MARK (Exception n st) = ?execOp_rhs_9
-execOp (UNMARK _) (Exception (S n) st) = ?execOp_rhs_2
-execOp (UNMARK h) (Exception Z st) = ?execOp_rhs_1
-
-execOp (PUSH v) (Exception n st) = ?execOp_rhs_7
-execOp ADD (Exception n st) = ?execOp_rhs_8
-execOp THROW (Exception n st) = ?execOp_rhs_11
-
-
---unwindStack : (n : Nat) -> Stack s -> Stack $ unwindStackType n s
---unwindStack Z      (Han st)  = st
---unwindStack (S n) (Han st)  = unwindStack n st
---unwindStack n (x |> st)  = unwindStack n (x |> st)
---unwindStack _      Nil       = Nil
-
+compile : (Exp t b) -> Code s (Val t :: s)
+compile (ValExp v) = sc $ PUSH v
+compile (PlusExp e1 e2) = (compile e2) ++ (compile e1) ++ (sc $ ADD)
+compile Throw = sc $ THROW
+compile (Catch e h) = (sc $ MARK) ++ (compile e) ++ (sc $ UNMARK $ compile h)
+ 
