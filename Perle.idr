@@ -105,3 +105,11 @@ compile (PlusExp e1 e2) = (compile e2) ++ (compile e1) ++ [(ADD)]
 compile Throw = [(THROW)]
 compile (Catch e h) = [(MARK)] ++ (compile e) ++ [(UNMARK $ compile h)]
  
+
+ {-
+ 
+ Example:
+ 
+let prog = Catch (Throw) (PlusExp (ValExp {t = TNat} 5) (ValExp 42)) in let comp = compile {s = []} prog in execCode comp (Normal [])
+  
+ -}
