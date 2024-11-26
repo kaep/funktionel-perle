@@ -97,12 +97,11 @@ mutual
     execCode Empty st = st
     execCode (i :: is) st = execCode is (execInstr i st)
 
-sc : Op s s' -> Code s s'
-sc op = op :: Empty 
+syntax "[(" [op] ")]" = (op) :: Empty
 
 compile : (Exp t b) -> Code s (Val t :: s)
-compile (ValExp v) = sc $ PUSH v
-compile (PlusExp e1 e2) = (compile e2) ++ (compile e1) ++ (sc $ ADD)
-compile Throw = sc $ THROW
-compile (Catch e h) = (sc $ MARK) ++ (compile e) ++ (sc $ UNMARK $ compile h)
+compile (ValExp v) = [(PUSH v)]
+compile (PlusExp e1 e2) = (compile e2) ++ (compile e1) ++ [(ADD)]
+compile Throw = [(THROW)]
+compile (Catch e h) = [(MARK)] ++ (compile e) ++ [(UNMARK $ compile h)]
  
