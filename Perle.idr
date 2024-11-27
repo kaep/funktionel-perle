@@ -49,10 +49,110 @@ example_let_deeper : Nat
 example_let_deeper = eval NilEnv (LetExp (PlusExp (ValExp {t = Tnat} 20) (ValExp {t = Tnat} 5)) (LetExp (PlusExp (ValExp {t = Tnat} 6) (ValExp {t = Tnat} 11)) (PlusExp (VarExp Stop) (VarExp (Pop Stop)))))
 
 
-StackType : Type
-StackType = List TyExp
+data StackType : Nat -> List TyExp -> Type where
+  Nil : StackType 0 []
+  Cons : (t : TyExp) -> StackType n l -> StackType n (t :: l)
+  ConsVar : (t : TyExp) -> StackType n l -> StackType (S n) (t :: l)
 
 
+infixr 10 |>
+infixr 11 $>
+data Stack : (s : StackType n l) -> Type where
+  EmptyStack : Stack Nil
+  (|>) : Val t -> Stack s -> Stack (Cons t s)
+  ($>) : Val t -> Stack s -> Stack (ConsVar t s)
+  --EmptyStack : Stack (Nil 0 [])
+  --(|>) : Val t -> Stack s -> Stack Cons t
+  --VarStack : Stack n s -> 
+
+
+total
+indexVar : (i : Fin n) -> (s : StackType n l) -> TyExp
+-- FZ betyder at vi har talt ned og nu er ved den var vi skal bruge
+-- match på s for at få den ud
+-- i dette tilfælde vil vi bare gerne have t? nej vent.
+-- vi har talt ned til nul og ser ikke en variabel... det er jo et problem...
+-- eller er det? betyder det ikke bare at vi skal tage den næste variabel?
+-- jo, korrekt.
+indexVar FZ (Cons hd remaining_stack) = indexVar FZ remaining_stack
+-- i dette tilfælde har vi talt ned til nul og står nu med en variabel, så vi returnerer bare t 
+indexVar FZ (ConsVar hd remaining_stack) = hd
+-- her nederst har vi stadig ikke talt helt ned, så vi bliver nødt til at
+-- matche s for at se hvad vi skal gøre.
+-- i første omgang møder vi ikke en variabel, så vi kalder rekursivt uden at tælle ned
+indexVar (FS x) (Cons hd remaining) = indexVar (FS x) remaining
+-- vi har mødt en variabel men er stadig ikke i bund,
+-- så vi tæller ned og kalder rekursivt
+indexVar (FS x) (ConsVar hd remaining) = indexVar x remaining
+
+-- indexTy med Fin n skal tage en stackype af længden m,
+-- der skal jo ikke være sammenhæng mellem hvor mange vars
+-- der er på stakken og det index. det er vel kun hvis vi specifkt vil finde en var
+indexTy : (i : Fin n) -> (s : StackType m l) -> TyExp
+indexTy FZ (Cons t remaining_types) = t
+-- the case below is shadowing? or is it? do we even want to handle this?
+indexTy FZ (ConsVar t remaining_types) = t
+indexTy (FS next) (Cons t remaining) = ?hullerne_1 --jeg skal have fat i noget fra remaining der er mindre jo... eller er det fordi stacktype ikke skal bindes af n?
+indexTy (FS next) (ConsVar t remaining) = ?hullerne_2 --indexTy next remaining --indexTy next remaining_types 
+
+--indexTy FZ (t :: _) = t
+--indexTy (FS k) (_ :: tail) = indexTy k tail
+
+data Code : (s : StackType n l) -> (s' : StackType n' l') -> Type where
+  Skip : Code s s
+  PUSH : (v : Val t) -> Code s (Cons t s)
+  ADD : Code (Cons Tnat (Cons Tnat s)) (Cons Tnat s)
+  POP : Code (Cons t s) (s)
+  -- VAR er spændende. En VAR instruktion skal gøre hvad? skubbe en variabel på jo!
+  -- Jeg skal stadig bruge noget der kan finde dens type. det er indexVar.
+  VAR : (i : Fin nat) -> Code s (ConsVar (indexVar i s) s) 
+
+  --ADDVar : Code () (Cons)
+  -- det kan ikke være rigtigt at vi skal definere add flere gange.
+  -- det kræver nok bare at en variabel kan hentes somehow, inden den bruges i arith. ja. 
+
+stackVarLookup : (i : Fin n) -> (st : Stack s) -> Val (indexVar i s)
+-- I FZ case har vi nu set alle de variable vi skal og er klar til at returnere næste
+-- i første tilfælde møder vi ikke en var, så vi kalder rekursivt
+stackVarLookup FZ (hd |> remaining) = stackVarLookup FZ remaining
+-- i næste tilfælde har vi mødt en var og skal returnere den
+stackVarLookup FZ (var $> remaining) = var
+-- i FS x casen skal vi splitte på state for at håndtere hhv. cons og consvar korrekt
+-- hvis det ikke er en var, så kalder vi rekursivt uden at tælle ned
+stackVarLookup (FS x) (val |> remaining) = stackVarLookup (FS x) remaining
+-- hvis det er en var, så kalder vi rekursivt og tæller ned
+stackVarLookup (FS x) (var $> remaining) = stackVarLookup x remaining
+
+-- lad os prøve at definere exec.
+exec : (Code s s') -> Stack s -> Stack s'
+exec Skip st = st
+exec (PUSH v) st = v |> st
+exec ADD (n |> m |> st) = (n+m) |> st
+exec POP (hd |> st) = st
+-- en variabel instruktion med i indikerer at vi skal finde variabel nummer i på stakken
+-- som jo har n variable, hvor i er Fin n.
+-- så skal vi bruge noge stacklookup igen? ja det er nok det.
+exec (VAR i) st = stackVarLookup i st $> st
+
+
+-- så kan vi definere compile
+-- signaturen må være den samme: givet et exp med en context og en type, producer noget kode hvor den type er tilføjet
+-- det er dog lidt mere verbose. og jeg kan ikke få lov at skrive de to stacktypes midt i code inkl. navn, så det bliver implicit
+-- vi skal nok også have et env med her.
+compile : {s : StackType n l} -> {s' : StackType n' (t :: l')} -> Environment context -> (Exp context t) -> Code s s'
+compile env (ValExp v) = ?compile_rhs_1
+compile env (PlusExp e1 e2) = ?compile_rhs_2
+compile env (IfExp b e1 e2) = ?compile_rhs_3
+compile env (SubExp e1 e2) = ?compile_rhs_4
+-- VarExp stop betyder den første variabel i context, så compile til VAR 0
+-- det kan jeg dog ikke, fordi jeg ikke ved om den er in bounds for fin..
+compile env (VarExp Stop) = ?h
+compile env (VarExp (Pop x)) = let valli = lookup (Pop x) env in ?hul_2 --jeg skal compile til VAR ?? 
+compile env (LetExp rhs body) = ?compile_rhs_6
+
+
+
+{-
 infixr 10 |>
 data Stack : (s: StackType) -> Type where
     Nil : Stack []
@@ -82,130 +182,4 @@ data Code : (s, s' : StackType) -> Type where
     -- we do not need an instruction for let.
     -- it just uses existing stuff + pop and swap
 
-valFromTyExp : (t : TyExp) -> (v : Val t) -> Val t
-valFromTyExp t v = v
-
-Uninhabited (Tnat = Tbool) where
-  uninhabited Refl impossible
-
-Uninhabited (Tbool = Tnat) where
-  uninhabited Refl impossible
-
-DecEq TyExp where
-  decEq Tnat Tnat = Yes Refl 
-  decEq Tbool Tbool = Yes Refl
-  decEq Tnat Tbool = No absurd
-  decEq Tbool Tnat = No absurd
-
-
-doIt : (expected : TyExp) -> (elem : Val t) -> Val expected
-doIt {t} expected elem = case decEq expected t of
-  Yes Refl => elem
-  No contra => ?no -- hvad gør man her? der skal jo en eller anden værdi ud. Vi kan godt bruge en "sentinel", men det er jo forkert..
-
-data NonEmptyStack : (typenafstak : StackType) -> Stack typenafstak -> Type where
-  NonEmpty : NonEmptyStack (hovedtype :: haletype) (h |> t)
-
-
-
-
--- kan vi bruge et implicit auto bevis for at stakken ikke er tom somehow?
--- men det lader ikke rigtigt til at virke...
-stackLookup : (idx : Fin n) -> (stak : Stack stype) -> Val (indexTy idx stype)
---stackLookup : {auto prf : NonEmptyStack stak} -> (idx : Fin n) -> (stak : Stack stype) -> Val (indexTy idx stype)
---stackLookup {prf = prf} FZ st = ?stackLookup_rhs_1
---stackLookup {prf = prf} (FS x) st = ?stackLookup_rhs_2
---stackLookup {stype = (t :: s)} FZ (element |> resten) = let expected_type = indexTy FZ (t :: s) in doIt expected_type element
---stackLookup {stype = (t :: s)} (FS x) (element |> resten) = stackLookup (FS x) (element |> resten) 
-
---stackLookup {stype} indi (element |> stak) = let expected_type = indexTy indi stype in doIt expected_type element
---stackLookup FZ (elem |> stak) = ?hullls
---stackLookup (FS ket) (elem |> stak) = let expected_type = indexTy (FS ket)
-stackLookup {stype = []} indi [] = let expecto = indexTy indi [] in ?huller --stakken er tom, det kan vi jo ikke arbejde med... vi skal vel sikre somehow (med type) at det ikke sker..
-stackLookup {stype = (t :: s)} index (element |> rest_of_stack) = let expected_type = indexTy index (t :: s) in doIt expected_type element
-
-stakkenLookup : (idx : Fin n) -> (stak : Stack staktypen) -> (prf : NonEmptyStack staktypen stak) -> Val (indexTy idx staktypen)
-stakkenLookup idx [] NonEmptyStack impossible
-stakkenLookup {staktypen = (t :: s)} idx (element |> rest) NonEmptyStack = let expected_type = indexTy idx (t :: s) in doIt expected_type element
-
-exec : {auto prf : NonEmptyStack staktypen stakkenmedtypen} -> (Code staktypen s') -> (stakkenmedtypen : Stack staktypen) -> Stack s'
-exec Skip st = st 
---exec (c1 ++ c2) st = exec c2 (exec c1 st)
-exec (PUSH v) st = v |> st
-exec ADD (n |> m |> st) = (n + m) |> st
---exec (IF c1 c2) (True |> stakkenmedtypen) = exec c1 stakkenmedtypen
---exec (IF c1 c2) (False |> st) = exec c2 st
-exec SUB (n |> m |> st) = (minus n m) |> st
-exec POP (t |> st) = st
-exec SWAP (x |> y |> st) = y |> x |> st
-exec {prf} (VAR idx) stakka = ?hullet --stakkenLookup idx stakkenade prf |> stakkenade --let hanzo = indexTy idx s in stakkenLookup idx st prf |> st
--- indexTy idx s giver mig en type. jeg skal have en værdi af netop type. så jeg skal somehow slå elementer op i stakken...
--- men stakken er jo indekseret af typerne, så det idx'te element er jo korrekt. jeg skal altså "bare" slå elementer op i stakken
-
-
-{-
-exec : (Code s s') -> (Stack s) -> (Stack s')
---exec {len} {otherLen} Skip s = case decEq len otherLen of
---  Yes Refl => s
---  No contra => ?nul
-exec Skip s = s
-exec (c1 ++ c2) s = exec c2 (exec c1 s)
-exec (PUSH v) s = v |> s
-exec ADD (n |> m |> s) = (n + m) |> s
-exec (IF c1 c2) (True |> s) = exec c1 s
-exec (IF c1 c2) (False |> s) = exec c2 s
-exec SUB (n |> m |> s) = (minus n m) |> s
-exec POP (t |> s) = s
-exec SWAP (x |> y |> s) = y |> x |> s
-exec (VAR i) s stack = let v = ?stacklookupneeded i stack in v |> stack
---exec (VAR i) stak = stak --let hanzo = ?funn i stak in ?hyggehul
--- this is a problem. we do not have the proof here..
--- we cant just use HasType since the stack is not a vect?
--- oooor, do we need to do some indexing/lookup in a stack?
-
-
-
-compile : (Exp context t) -> Code s (t :: s)
-compile (ValExp v) = PUSH v
-compile (PlusExp e1 e2) = compile e2 ++ compile e1 ++ ADD
-compile (IfExp b e1 e2) = (compile b) ++ (IF (compile e1) (compile e2))
-compile (SubExp e1 e2) = compile e2 ++ compile e1 ++ SUB
-compile (VarExp Stop) = VAR 0
-compile (VarExp (Pop x)) = ?varhul
-compile (LetExp rhs body) = compile rhs ++ compile body ++ SWAP ++ POP
 -}
-
-
-{-
-mutual
-  trans_eval_compile : eval e1 |> (eval e2 |> s) = exec (compile e1) (exec (compile e2) s)
-  trans_eval_compile {e1} {e2} {s} =
-    let e2eval = (eval e2) |> s in
-    let lhs = correct e1 e2eval in
-    let rhs = cong {f = \s' => exec (compile e1) s'} (correct e2 s) in
-    trans lhs rhs
-
-
-  correct : (e: Exp t) -> (s: Stack s') -> ((eval e) |> s) = exec (compile e) s
-  correct (ValExp v) s = Refl
-  correct (PlusExp e1 e2) s =
-    let exec_add = cong {f = \s' => exec ADD s'} (trans_eval_compile {s = s}) in
-    trans Refl exec_add
-  correct (IfExp b et ef) s =
-    trans h1 h2
-    where
-      h1 : (if eval b then eval et else eval ef) |> s =
-           exec (IF (compile et) (compile ef)) (eval b |> s)
-      h1 with (eval b)
-        | True = correct et s
-        | False = correct ef s
-
-      h2 : exec (IF (compile et) (compile ef)) (eval b |> s) =
-           exec (IF (compile et) (compile ef)) (exec (compile b) s)
-      h2 = 
-        cong {f = \s' => exec (IF (compile et) (compile ef)) s'} (correct b s)
-  correct (SubExp e1 e2) s = 
-    let exec_sub = cong {f = \s' => exec SUB s'} (trans_eval_compile {s = s}) in
-    trans Refl exec_sub
-
-    -}
