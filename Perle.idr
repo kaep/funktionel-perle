@@ -1,7 +1,7 @@
 import Data.Vect
 import Data.Fin
 
---%default total
+%default total
 
 using (context : Vect n TyExp)
 
@@ -21,181 +21,95 @@ using (context : Vect n TyExp)
     IfExp : (b : Exp context Tbool) -> (e1 : Exp context t) -> (e2 : Exp context t) -> Exp context t
     SubExp : (e1 : Exp context Tnat) -> (e2 : Exp context Tnat) -> Exp context Tnat
     VarExp : HasType i context t -> Exp context t
-    LetExp : (rhs : Exp context t) -> (body : Exp (t:: context) t) -> Exp context t
+    LetExp : (rhs : Exp context t) -> (body : Exp (t :: context) t') -> Exp context t'
 
   data Environment : Vect n TyExp -> Type where
     NilEnv : Environment Nil
     (::) : Val t -> Environment context -> Environment (t :: context)
   
-  lookup : HasType i context t -> Environment context -> Val t
-  lookup Stop (head :: tail) = head
-  lookup (Pop x) (head :: tail) = lookup x tail
+  envLookup : HasType i context t -> Environment context -> Val t
+  envLookup Stop (head :: tail) = head
+  envLookup (Pop x) (head :: tail) = envLookup x tail
 
   eval : Environment context -> Exp context t -> Val t
   eval env (ValExp v) = v
   eval env (PlusExp e1 e2) = eval env e1 + eval env e2
   eval env (IfExp b e1 e2) = if eval env b then eval env e1 else eval env e2
   eval env (SubExp e1 e2) = minus (eval env e1) (eval env e2)
-  eval env (VarExp i) = lookup i env
+  eval env (VarExp i) = envLookup i env
   eval env (LetExp rhs body) = let rhs' = eval env rhs in eval (rhs' :: env) body
 
-example_prog : Nat
-example_prog = eval NilEnv (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tnat} 2))
+  example_prog : Nat
+  example_prog = eval NilEnv (IfExp (ValExp False) (ValExp {t = Tnat} 3) (ValExp {t = Tnat} 2))
 
-example_let : Nat
-example_let = eval NilEnv (LetExp (PlusExp (ValExp {t = Tnat} 37) (ValExp {t = Tnat} 3)) (PlusExp (ValExp {t = Tnat} 2) (VarExp Stop)))
+  example_let : Nat
+  example_let = eval NilEnv (LetExp (PlusExp (ValExp {t = Tnat} 37) (ValExp {t = Tnat} 3)) (PlusExp (ValExp {t = Tnat} 2) (VarExp Stop)))
 
-example_let_deeper : Nat
-example_let_deeper = eval NilEnv (LetExp (PlusExp (ValExp {t = Tnat} 20) (ValExp {t = Tnat} 5)) (LetExp (PlusExp (ValExp {t = Tnat} 6) (ValExp {t = Tnat} 11)) (PlusExp (VarExp Stop) (VarExp (Pop Stop)))))
+  example_let_deeper : Nat
+  example_let_deeper = eval NilEnv (LetExp (PlusExp (ValExp {t = Tnat} 20) (ValExp {t = Tnat} 5)) (LetExp (PlusExp (ValExp {t = Tnat} 6) (ValExp {t = Tnat} 11)) (PlusExp (VarExp Stop) (VarExp (Pop Stop)))))
 
-
-data StackType : Nat -> List TyExp -> Type where
-  Nil : StackType 0 []
-  Cons : (t : TyExp) -> StackType n l -> StackType n (t :: l)
-  ConsVar : (t : TyExp) -> StackType n l -> StackType (S n) (t :: l)
+  StackType : Type
+  StackType = List TyExp
 
 
-infixr 10 |>
-infixr 11 $>
-data Stack : (s : StackType n l) -> Type where
-  EmptyStack : Stack Nil
-  (|>) : Val t -> Stack s -> Stack (Cons t s)
-  ($>) : Val t -> Stack s -> Stack (ConsVar t s)
-  --EmptyStack : Stack (Nil 0 [])
-  --(|>) : Val t -> Stack s -> Stack Cons t
-  --VarStack : Stack n s -> 
+  infixr 10 |>
+  data Stack : (s: StackType) -> Type where
+      NilStack : Stack []
+      (|>) : Val t -> Stack s -> Stack (t :: s)
+
+  SCons : Val t -> Stack s -> Stack (t :: s)
+  SCons = (|>)
+
+  top : (s : Stack (t :: s')) -> Val t
+  top (head |> _) = head
 
 
-total
-indexVar : (i : Fin n) -> (s : StackType n l) -> TyExp
--- FZ betyder at vi har talt ned og nu er ved den var vi skal bruge
--- match på s for at få den ud
--- i dette tilfælde vil vi bare gerne have t? nej vent.
--- vi har talt ned til nul og ser ikke en variabel... det er jo et problem...
--- eller er det? betyder det ikke bare at vi skal tage den næste variabel?
--- jo, korrekt.
-indexVar FZ (Cons hd remaining_stack) = indexVar FZ remaining_stack
--- i dette tilfælde har vi talt ned til nul og står nu med en variabel, så vi returnerer bare t 
-indexVar FZ (ConsVar hd remaining_stack) = hd
--- her nederst har vi stadig ikke talt helt ned, så vi bliver nødt til at
--- matche s for at se hvad vi skal gøre.
--- i første omgang møder vi ikke en variabel, så vi kalder rekursivt uden at tælle ned
-indexVar (FS x) (Cons hd remaining) = indexVar (FS x) remaining
--- vi har mødt en variabel men er stadig ikke i bund,
--- så vi tæller ned og kalder rekursivt
-indexVar (FS x) (ConsVar hd remaining) = indexVar x remaining
+  data HasTypeInStack : (i : Fin n) -> (s: StackType) -> TyExp -> Type where
+    StopStack : HasTypeInStack FZ (t :: s) t
+    PopStack : HasTypeInStack k s t -> HasTypeInStack (FS k) (u :: s) t
 
--- indexTy med Fin n skal tage en stackype af længden m,
--- der skal jo ikke være sammenhæng mellem hvor mange vars
--- der er på stakken og det index. det er vel kun hvis vi specifkt vil finde en var
-indexTy : (i : Fin n) -> (s : StackType m l) -> TyExp
-indexTy FZ (Cons t remaining_types) = t
--- the case below is shadowing? or is it? do we even want to handle this?
-indexTy FZ (ConsVar t remaining_types) = t
-indexTy (FS next) (Cons t remaining) = ?hullerne_1 --jeg skal have fat i noget fra remaining der er mindre jo... eller er det fordi stacktype ikke skal bindes af n?
-indexTy (FS next) (ConsVar t remaining) = ?hullerne_2 --indexTy next remaining --indexTy next remaining_types 
+  data Code : (s, s' : StackType) -> Type where
+      Skip : Code s s
+      (++) : (c1 : Code s0 s1) -> (c2 : Code s1 s2) -> Code s0 s2
+      PUSH : (v : Val t) -> Code s (t :: s)
+      ADD : Code (Tnat :: Tnat :: s) (Tnat :: s)
+      IF : (c1, c2 : Code s s') -> Code (Tbool :: s) s'
+      SUB : Code (Tnat :: Tnat :: s) (Tnat :: s)
+      VAR : (HasTypeInStack i s t) -> Code s (t :: s)
+      POP : Code (t :: s) (s)
+      SWAP : Code (x :: y :: s) (y :: x :: s)
 
---indexTy FZ (t :: _) = t
---indexTy (FS k) (_ :: tail) = indexTy k tail
+  {-
+  envLookup : HasType i context t -> Environment context -> Val t
+  envLookup Stop (head :: tail) = head
+  envLookup (Pop x) (head :: tail) = envLookup x tail
+  -}
+  total
+  stackLookup : (s : StackType) -> HasTypeInStack i s t -> (st : Stack s) -> Val t 
+  stackLookup (t :: xs) StopStack (x |> y) = x
+  stackLookup (t :: xs) (PopStack x) (hd |> tail) = stackLookup xs x tail
+  --stackLookup StopStack [] = ?stackLookup_rhs_3
+  --stackLookup StopStack (x :: xs) = ?kk
+  --stackLookup (PopStack x) s = ?stackLookup_rhs_2
 
-data Code : (s : StackType n l) -> (s' : StackType n' l') -> Type where
-  Skip : Code s s
-  PUSH : (v : Val t) -> Code s (Cons t s)
-  ADD : Code (Cons Tnat (Cons Tnat s)) (Cons Tnat s)
-  POP : Code (Cons t s) (s)
-  -- VAR er spændende. En VAR instruktion skal gøre hvad? skubbe en variabel på jo!
-  -- Jeg skal stadig bruge noget der kan finde dens type. det er indexVar.
-  VAR : (i : Fin nat) -> Code s (ConsVar (indexVar i s) s) 
+  total
+  exec : (Code s s') -> Stack s -> Stack s'
+  exec Skip st = st
+  exec (c1 ++ c2) s = exec c2 (exec c1 s)
+  exec (PUSH v) st = v |> st 
+  exec ADD (n |> m |> st) = (n+m) |> st 
+  exec (IF c1 c2) (True |> s) = exec c1 s
+  exec (IF c1 c2) (False |> s) = exec c2 s
+  exec SUB (n |> m |> s) = (minus n m) |> s
+  exec {s} (VAR id) st = let hans = stackLookup s id st in hans |> st
+  exec POP (hd |> st) = st
+  exec SWAP (x |> y |> st) = y |> x |> st
 
-  --ADDVar : Code () (Cons)
-  -- det kan ikke være rigtigt at vi skal definere add flere gange.
-  -- det kræver nok bare at en variabel kan hentes somehow, inden den bruges i arith. ja. 
-
-stackVarLookup : (i : Fin n) -> (st : Stack s) -> Val (indexVar i s)
--- I FZ case har vi nu set alle de variable vi skal og er klar til at returnere næste
--- i første tilfælde møder vi ikke en var, så vi kalder rekursivt
-stackVarLookup FZ (hd |> remaining) = stackVarLookup FZ remaining
--- i næste tilfælde har vi mødt en var og skal returnere den
-stackVarLookup FZ (var $> remaining) = var
--- i FS x casen skal vi splitte på state for at håndtere hhv. cons og consvar korrekt
--- hvis det ikke er en var, så kalder vi rekursivt uden at tælle ned
-stackVarLookup (FS x) (val |> remaining) = stackVarLookup (FS x) remaining
--- hvis det er en var, så kalder vi rekursivt og tæller ned
-stackVarLookup (FS x) (var $> remaining) = stackVarLookup x remaining
-
--- lad os prøve at definere exec.
-exec : (Code s s') -> Stack s -> Stack s'
-exec Skip st = st
-exec (PUSH v) st = v |> st
-exec ADD (n |> m |> st) = (n+m) |> st
-exec POP (hd |> st) = st
--- en variabel instruktion med i indikerer at vi skal finde variabel nummer i på stakken
--- som jo har n variable, hvor i er Fin n.
--- så skal vi bruge noge stacklookup igen? ja det er nok det.
-exec (VAR i) st = stackVarLookup i st $> st
-
-
--- så kan vi definere compile
--- signaturen må være den samme: givet et exp med en context og en type, producer noget kode hvor den type er tilføjet
--- det er dog lidt mere verbose. og jeg kan ikke få lov at skrive de to stacktypes midt i code inkl. navn, så det bliver implicit
--- vi skal nok også have et env med her.
-{-
-compile : {s : StackType n l} -> {s' : StackType n' (t :: l')} -> Environment context -> (Exp context t) -> Code s s'
-compile env (ValExp v) = ?compile_rhs_1
-compile env (PlusExp e1 e2) = ?compile_rhs_2
-compile env (IfExp b e1 e2) = ?compile_rhs_3
-compile env (SubExp e1 e2) = ?compile_rhs_4
--- VarExp stop betyder den første variabel i context, så compile til VAR 0
--- det kan jeg dog ikke, fordi jeg ikke ved om den er in bounds for fin..
-compile env (VarExp Stop) = ?h
-compile env (VarExp (Pop x)) = let valli = lookup (Pop x) env in ?hul_2 --jeg skal compile til VAR ?? 
-compile env (LetExp rhs body) = ?compile_rhs_6
--}
---compile : {s : StackType n l} -> {s' : StackType n' (t :: l')} -> (Exp context t) -> Code () s'
---compile : (Exp context t) -> Code (StackType n l) (StackType n' l')
-compile : (Exp context t) -> Code s s'
-compile (ValExp v) = ?j
-compile (PlusExp e1 e2) = ?compile_rhs_2
-compile (IfExp b e1 e2) = ?compile_rhs_3
-compile (SubExp e1 e2) = ?compile_rhs_4
-compile (VarExp x) = ?compile_rhs_5
-compile (LetExp rhs body) = ?compile_rhs_6
---compile (ValExp v) = ?hullet
---compile (PlusExp e1 e2) = ?compile_rhs_2
---compile (IfExp b e1 e2) = ?compile_rhs_3
---compile (SubExp e1 e2) = ?compile_rhs_4
---compile (VarExp x) = ?compile_rhs_5
---compile (LetExp rhs body) = ?compile_rhs_6
-
-
-{-
-infixr 10 |>
-data Stack : (s: StackType) -> Type where
-    Nil : Stack []
-    (|>) : Val t -> Stack s -> Stack (t :: s)
-
-SCons : Val t -> Stack s -> Stack (t :: s)
-SCons = (|>)
-
-top : (s : Stack (t :: s')) -> Val t
-top (head |> _) = head
-
-indexTy : (i : Fin n) -> (s : StackType) -> TyExp
-indexTy FZ (t :: _) = t
-indexTy (FS k) (_ :: tail) = indexTy k tail
-
-
-data Code : (s, s' : StackType) -> Type where
-    Skip : Code s s
-    (++) : (c1 : Code s0 s1) -> (c2 : Code s1 s2) -> Code s0 s2
-    PUSH : (v : Val t) -> Code s (t :: s)
-    ADD : Code (Tnat :: Tnat :: s) (Tnat :: s)
-    IF : (c1, c2 : Code s s') -> Code (Tbool :: s) s'
-    SUB : Code (Tnat :: Tnat :: s) (Tnat :: s)
-    POP : Code (t :: s) (s)
-    SWAP : Code (x :: y :: s) (y :: x :: s)
-    VAR : (i : Fin n) -> Code s (indexTy i s :: s) -- i is index, t is just an implicit type?
-    -- we do not need an instruction for let.
-    -- it just uses existing stuff + pop and swap
-
--}
+  compile : Environment context -> (Exp context t) -> Code s (t :: s)
+  compile env (ValExp v) = PUSH v
+  compile env (PlusExp e1 e2) = compile env e2 ++ compile env e1 ++ ADD
+  compile env (IfExp b e1 e2) = (compile env b) ++ (IF (compile env e1) (compile env e2))
+  compile env (SubExp e1 e2) = compile env e2 ++ compile env e1 ++ SUB
+  compile env (VarExp x) = let hans = envLookup x env in PUSH hans
+  -- hvad gør en let binding? den udvider vel context?
+  compile env (LetExp rhs body) = ?hullet --compile env rhs ++ compile env body ++ SWAP ++ POP
