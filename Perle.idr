@@ -139,6 +139,7 @@ exec (VAR i) st = stackVarLookup i st $> st
 -- signaturen må være den samme: givet et exp med en context og en type, producer noget kode hvor den type er tilføjet
 -- det er dog lidt mere verbose. og jeg kan ikke få lov at skrive de to stacktypes midt i code inkl. navn, så det bliver implicit
 -- vi skal nok også have et env med her.
+{-
 compile : {s : StackType n l} -> {s' : StackType n' (t :: l')} -> Environment context -> (Exp context t) -> Code s s'
 compile env (ValExp v) = ?compile_rhs_1
 compile env (PlusExp e1 e2) = ?compile_rhs_2
@@ -149,7 +150,22 @@ compile env (SubExp e1 e2) = ?compile_rhs_4
 compile env (VarExp Stop) = ?h
 compile env (VarExp (Pop x)) = let valli = lookup (Pop x) env in ?hul_2 --jeg skal compile til VAR ?? 
 compile env (LetExp rhs body) = ?compile_rhs_6
-
+-}
+--compile : {s : StackType n l} -> {s' : StackType n' (t :: l')} -> (Exp context t) -> Code () s'
+--compile : (Exp context t) -> Code (StackType n l) (StackType n' l')
+compile : (Exp context t) -> Code s s'
+compile (ValExp v) = ?j
+compile (PlusExp e1 e2) = ?compile_rhs_2
+compile (IfExp b e1 e2) = ?compile_rhs_3
+compile (SubExp e1 e2) = ?compile_rhs_4
+compile (VarExp x) = ?compile_rhs_5
+compile (LetExp rhs body) = ?compile_rhs_6
+--compile (ValExp v) = ?hullet
+--compile (PlusExp e1 e2) = ?compile_rhs_2
+--compile (IfExp b e1 e2) = ?compile_rhs_3
+--compile (SubExp e1 e2) = ?compile_rhs_4
+--compile (VarExp x) = ?compile_rhs_5
+--compile (LetExp rhs body) = ?compile_rhs_6
 
 
 {-
