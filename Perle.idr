@@ -110,6 +110,32 @@ using (context : Vect n TyExp)
   compile env (PlusExp e1 e2) = compile env e2 ++ compile env e1 ++ ADD
   compile env (IfExp b e1 e2) = (compile env b) ++ (IF (compile env e1) (compile env e2))
   compile env (SubExp e1 e2) = compile env e2 ++ compile env e1 ++ SUB
-  compile env (VarExp x) = let hans = envLookup x env in PUSH hans
+  --compile env (VarExp x) = PUSH $ envLookup x env
+  -- vent, det er jo forkert bare at skubbe variablen, er det ikke?
+  -- vi skal jo skubbe en VAR instruktion.
+  -- men vi har jo den ene type bevis og skal producere den anden type...
+  -- det bliver problematisk?
+  compile env (VarExp x) = ?h
   -- hvad gør en let binding? den udvider vel context?
-  compile env (LetExp rhs body) = ?hullet --compile env rhs ++ compile env body ++ SWAP ++ POP
+  compile env (LetExp rhs body) = 
+    -- problemet her er, at body er et exp med en context der er udvidet.
+    -- letexp er bygget op omkring at body bruger en context der er udvidet
+    -- med den type der produceres af rhs, men den kan vi ikke få fat i her.
+    -- Sestoft bogen gør således:
+    -- scomp rhs env ++ scomp body (Bound x :: env) ++ POP ++ SWAP
+    -- hvor x er streng-navnet på variablen og Bound er en ctor
+    -- der indikerer at noget er en bunden variabel.
+    -- Han har flere "niveauer" af expressions, der compiler
+    -- til hinanden. F.eks. har Let et string-navn i source-sprog,
+    -- og det sprog compiler han til et andet sprog som bruger de brujin indices.
+    -- i den oversættelse kan variabel-opslag fejle...
+    -- MEN essensen er jo, at body oversættes i et env hvor navnet på let-bindingen
+    -- forbindes med højresiden.
+    -- hvis vi skal gøre det samme, skal vi jo på en eller anden måde markere
+
+
+
+    --let compiled_rhs = compile env rhs in
+    --let hanzo = compile (Tnat :: env) body in
+    ?hher
+
