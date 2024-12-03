@@ -1,7 +1,7 @@
 import Data.Vect
 import Data.Fin
 
-%default total
+--%default total
 
 using (context : Vect n TyExp)
 
@@ -11,9 +11,108 @@ using (context : Vect n TyExp)
   Val Tnat = Nat
   Val Tbool = Bool
 
+  data BadExp : TyExp -> Type where
+    BValExp : (v : Val t) -> BadExp t
+    BPlusExp : (e1 : BadExp Tnat) -> (e2 : BadExp Tnat) -> BadExp Tnat
+    BIfExp : (b : BadExp Tbool) -> (e1 : BadExp t) -> (e2 : BadExp t) -> BadExp t
+    BSubExp : (e1 : BadExp Tnat) -> (e2 : BadExp Tnat) -> BadExp Tnat
+    BVarExp : (name : String) -> BadExp t
+    BLetExp : (name : String) -> (rhs : BadExp t) -> (body : BadExp t') -> BadExp t'
+
+
+  {-
+  examp : BadExp [] Tnat
+  examp = BValExp {t = Tnat} 38
+
+  examp2 : BadExp [] Tnat
+  examp2 = BPlusExp (BValExp {t = Tnat} 38) (BValExp {t = Tnat} 5)
+
+  -- vi går fra en context til en udvidet context til ikke-udvidet context igen.
+  examp3 : BadExp [] Tnat
+  examp3 = BLetExp ("x") (BValExp {t = Tnat} 38) (BPlusExp (BVarExp "x") (BValExp {t = Tnat} 5))
+
+  -}
   data HasType : (i : Fin n) -> Vect n TyExp -> TyExp -> Type where
     Stop : HasType FZ (t :: context) t
     Pop : HasType k context t -> HasType (FS k) (u :: context) t
+
+  data DeBruijnExp : (n : Nat) -> TyExp -> Type where
+    DValExp : (v : Val t) -> DeBruijnExp n t
+    DPlusExp : (e1 : DeBruijnExp n Tnat) -> (e2 : DeBruijnExp n Tnat) -> DeBruijnExp n Tnat
+    DIfExp : (b : DeBruijnExp n Tbool) -> (e1 : DeBruijnExp n t) -> (e2 : DeBruijnExp n t) -> DeBruijnExp n t
+    DSubExp : (e1 : DeBruijnExp n Tnat) -> (e2 : DeBruijnExp n Tnat) -> DeBruijnExp n Tnat
+    -- a variable expression takes an index
+    DVarExp : (idx : Fin n) -> DeBruijnExp n t
+    DLetExp : (rhs : DeBruijnExp n t) -> (body : DeBruijnExp (S n) t') -> DeBruijnExp n t'
+  
+  --varEnvLookupHelper : (idx : Nat) -> (name : String) -> (varEnv : Vect n (String, TyExp)) -> Maybe (TyExp, Fin n)
+  --varEnvLookupHelper idx name [] = Nothing
+  --varEnvLookupHelper idx name ((name', ty) :: tail) = if name == name' then ?thenhul else ?elsehul --if name == name' then Just (ty, ?hulli) else varEnvLookupHelper ?hullo name tail --(S idx) name tail 
+  
+  varEnvLookup : (name : String) -> (varEnv : Vect n (String, TyExp)) -> Maybe (TyExp, Fin n)
+  varEnvLookup name [] = Nothing
+  varEnvLookup name ((name', ty) :: tail) = if name == name' then Just (ty, FZ) else let (ty', f) = !(varEnvLookup name tail) in Just (ty', FS f)
+
+  --varEnvLookupW : {i : Fin n} -> {t : TyExp} -> (name : String) -> (varEnv : Vect n (String, TyExp)) -> Maybe (TyExp, Fin n, HasType i context t)
+  --varEnvLookupW name [] = Nothing
+  --varEnvLookupW name ((name', ty) :: tail) = if name == name' then Just (ty, FZ, Stop) else let (ty', f, prf) = !(varEnvLookupW name tail) in Just (ty', FS f, Pop prf)
+
+  --idxToProof : (idx : Fin n) -> (t : TyExp) -> HasType idx context t
+  --idxToProof FZ t = ?hullis --Stop
+  --idxToProof (FS x) t = ?bullis --Pop (idxToProof x t)
+
+  --honni : (ty : TyExp) -> (name : String) -> (varEnv : Vect n (String, TyExp)) -> HasType idx context t
+  --honni ty name [] = Stop
+  --honni ty name (x :: xs) = ?honni_rhs1_2
+
+  bad_to_bruijn : (varEnv : Vect n (String)) -> (source : BadExp t) -> Maybe (DeBruijnExp n t)
+  bad_to_bruijn varEnv (BValExp v) = Just $ DValExp v
+  bad_to_bruijn varEnv (BPlusExp e1 e2) = Just $ DPlusExp (!(bad_to_bruijn varEnv e1)) (!(bad_to_bruijn varEnv e2))
+  bad_to_bruijn varEnv (BIfExp b e1 e2) = Just $ DIfExp (!(bad_to_bruijn varEnv b)) (!(bad_to_bruijn varEnv e1)) (!(bad_to_bruijn varEnv e2))
+  bad_to_bruijn varEnv (BSubExp e1 e2) = Just $ DSubExp (!(bad_to_bruijn varEnv e1)) (!(bad_to_bruijn varEnv e2))
+  bad_to_bruijn varEnv (BVarExp name) = case findIndex (== name) varEnv of
+    Nothing => Nothing
+    Just (idx) => Just $ (DVarExp idx)
+  bad_to_bruijn varEnv (BLetExp name rhs body) = Just $ (DLetExp (!(bad_to_bruijn varEnv rhs)) (!(bad_to_bruijn (name :: varEnv) body)))
+
+  lookilooki : (i : Fin n) -> Vect n (Val t) -> Val t 
+  lookilooki FZ (hd :: tail) = ?hullan--hd 
+  lookilooki (FS next) (_ :: tail) = lookilooki next tail
+
+  data Environment : Vect n TyExp -> Type where
+    NilEnv : Environment Nil
+    (::) : Val t -> Environment context -> Environment (t :: context)
+
+  lookienv : (i : Fin n) -> Environment context -> Val t
+  lookienv FZ (hd :: _) = ?lookienv_rhs_3
+  lookienv (FS y) x = ?lookienv_rhs_2
+
+    
+  EvalStackType : Nat -> Type
+  EvalStackType n = Vect n TyExp 
+
+  infixr 10 |$>
+  data EvaloStack : (n : Nat) -> (s: EvalStackType n) -> Type where
+      NiloStack : EvaloStack 0 []
+      (|$>) : Val t -> EvaloStack n s -> EvaloStack (S n) (t :: s)
+  
+  
+  --unwindEvalStackType : Fin len -> EvalStackType len -> EvalStackType len
+
+  indexEval : (i : Fin len) -> EvaloStack len s -> Val (Data.Vect.index i s)
+  indexEval FZ     (x |$> xs) = x
+  indexEval (FS k) (x |$> xs) = indexEval k xs
+
+
+  -- evalueringsenv er nu bare et vector af længde n med tyexp aka en context
+  -- kan nok sagtens genbruge environment context..
+  bruijn_eval : EvaloStack n s -> DeBruijnExp n t -> Val t
+  bruijn_eval env (DValExp v) = v
+  bruijn_eval env (DPlusExp e1 e2) = bruijn_eval env e1 + bruijn_eval env e2
+  bruijn_eval env (DIfExp b e1 e2) = if bruijn_eval env b then bruijn_eval env e1 else bruijn_eval env e2
+  bruijn_eval env (DSubExp e1 e2) = minus (bruijn_eval env e1) (bruijn_eval env e2)
+  bruijn_eval env (DVarExp idx) = indexEval idx env --lookilooki idx env
+  bruijn_eval env (DLetExp rhs body) = ?bruijn_eval_rhs_6
 
   data Exp : Vect n TyExp -> TyExp -> Type where
     ValExp : (v : Val t) -> Exp context t
@@ -23,9 +122,6 @@ using (context : Vect n TyExp)
     VarExp : HasType i context t -> Exp context t
     LetExp : (rhs : Exp context t) -> (body : Exp (t :: context) t') -> Exp context t'
 
-  data Environment : Vect n TyExp -> Type where
-    NilEnv : Environment Nil
-    (::) : Val t -> Environment context -> Environment (t :: context)
   
   envLookup : HasType i context t -> Environment context -> Val t
   envLookup Stop (head :: tail) = head
@@ -48,15 +144,15 @@ using (context : Vect n TyExp)
   example_let_deeper : Nat
   example_let_deeper = eval NilEnv (LetExp (PlusExp (ValExp {t = Tnat} 20) (ValExp {t = Tnat} 5)) (LetExp (PlusExp (ValExp {t = Tnat} 6) (ValExp {t = Tnat} 11)) (PlusExp (VarExp Stop) (VarExp (Pop Stop)))))
 
+
   StackType : Type
   StackType = List TyExp
-
 
   infixr 10 |>
   data Stack : (s: StackType) -> Type where
       NilStack : Stack []
       (|>) : Val t -> Stack s -> Stack (t :: s)
-
+  
   SCons : Val t -> Stack s -> Stack (t :: s)
   SCons = (|>)
 
