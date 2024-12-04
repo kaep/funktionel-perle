@@ -152,9 +152,14 @@ codeChangeByExp (VarExp x) s = ?codeChangeByExp_rhs_5
 codeChangeByExp (LetExp rhs body) s = ?codeChangeByExp_rhs_6
 -}
 
+-- can i somehow give the subproofs here?
 data CodeChangeByType : (Exp context t) -> (s: StackType n l) -> (s': StackType n' l') -> Type where
   ValExpChange : CodeChangeByType (ValExp {t} v) s (Cons t s)
-  PlusExpChange : CodeChangeByType (PlusExp e1 e2) s (Cons Tnat s)
+  --PlusExpChange : CodeChangeByType (PlusExp e1 e2) s (Cons Tnat s)
+  PlusExpChange : (prf1 : CodeChangeByType e1 s (Cons Tnat s)) -> (prf2 : CodeChangeByType e2 (Cons Tnat s) (Cons Tnat (Cons Tnat s))) -> CodeChangeByType (PlusExp e1 e2) s (Cons Tnat s)
+  
+  --PlusExpChange : (prf1 : CodeChangeByType e1 s0 s1) -> CodeChangeByType (PlusExp e1 e2) s (Cons Tnat s)
+  --PlusExpChange : (prf1 : CodeChangeByType e1 s s') -> CodeChangeByType (PlusExp e1 e2) s (Cons Tnat s)
   SubExpChange : CodeChangeByType (SubExp e1 e2) s (Cons Tnat s)
   VarExpChange : CodeChangeByType (VarExp {t} {i} prf) s (ConsVar (indexVar i s) s)
   -- a let expression pushes t' on the stack
@@ -178,16 +183,8 @@ compile env (VarExp x) = ?compile_rhs_5
 compile env (LetExp rhs body) = ?compile_rhs_6
 -}
 
-codeChangeByExp : (e : Exp context t) -> (s : StackType n l) -> (s' : StackType n' l') -> CodeChangeByType e s s'
-codeChangeByExp (ValExp v) [] [] = ?erer
-codeChangeByExp (ValExp v) (Cons t x) (Cons t' x') = ?codeChangeByExp_rhs_8
-codeChangeByExp (ValExp v) (ConsVar t x) (ConsVar t' x') = ?codeChangeByExp_rhs_9
-codeChangeByExp (PlusExp e1 e2) s s' = ?codeChangeByExp_rhs_2
-codeChangeByExp (IfExp b e1 e2) s s' = ?codeChangeByExp_rhs_3
-codeChangeByExp (SubExp e1 e2) s s' = ?codeChangeByExp_rhs_4
-codeChangeByExp (VarExp x) s s' = ?codeChangeByExp_rhs_5
-codeChangeByExp (LetExp rhs body) s s' = ?codeChangeByExp_rhs_6
-
+--codeChangeByExp : (e : Exp context t) -> (s : StackType n l) -> (s' : StackType n' l') -> CodeChangeByType e s s'
+--codeChangeByExp : (e : Exp context t) -> CodeChangeByType e s s'
 
 codieWodie : (e : Exp context t) -> (s : StackType n l) -> Code s s'
 codieWodie (ValExp v) s = ?codieWodie_rhs_1
@@ -197,18 +194,26 @@ codieWodie (SubExp e1 e2) s = ?codieWodie_rhs_4
 codieWodie (VarExp x) s = ?codieWodie_rhs_5
 codieWodie (LetExp rhs body) s = ?codieWodie_rhs_6
 
+codeChangeByExp : (e : Exp context t) -> (s : StackType n l) -> (s' : StackType n' l') -> CodeChangeByType e s s'
+codeChangeByExp e s s' = ?codeChangeByExp_rhs
+
 -- this is very cool but does not support recursive calls...
 -- i need a function that can give me the code change based on the type...
 -- it really would be nice if this was auto implicit..
-{-
+-- also, a function to generate these proofs would also not work, because subexpressions work on substacks, right?
 compile : Environment context -> (e : Exp context t) -> (change : CodeChangeByType e s s') -> Code s s'
 compile env (ValExp v) ValExpChange = PUSH v
-compile env (PlusExp e1 e2) PlusExpChange = ?bananhul --let banan = compile env e1 PlusExpChange in ?hullan
+-- well, siden at jeg bare kan slippe afsted med add her, har jeg jo tydeligvis et problem med def af pluxexpchange...
+-- men jeg skal jo egentlig bare ende med en tnat på stakken, så jeg kan måske godt slippe afsted med 
+-- bare at gå fra "s" i plusexpchange? men har jeg så fjernet noget af typesikkerheden?
+-- det her er helt sikkert ikke korrekt...
+compile env (PlusExp e1 e2) (PlusExpChange prf1 prf2) = let e1' = compile env e1 prf1 in let e2' = compile env e2 prf2 in let added = e1' ++ e2' in added ++ ADD--let e2' = compile env e2 prf2 in let e1' = compile env e1 prf1 in e2' ++ ADD --e1' ++ e2' ++ ADD --e2' ++ e1' ++ ADD
+--compile env (PlusExp e1 e2) PlusExpChange = ?erwer
+--compile env (PlusExp e1 e2) PlusExpChange = let e1' = compile env e1 prf1 in ?hh
 compile env (IfExp b e1 e2) change = ?compile_rhs_3
 compile env (SubExp e1 e2) SubExpChange = ?compile_rhs_1
 compile env (VarExp {i} prf) VarExpChange = VAR i
 compile env (LetExp rhs body) LetExpChange = ?compile_rhs_2
--}
 
 --compile : {s : StackType n l} -> {s' : StackType n' l'} -> Environment context -> (Exp context t) -> Code s s'
 {-
