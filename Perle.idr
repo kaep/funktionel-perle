@@ -106,12 +106,15 @@ data Code : (s : StackType n l) -> (s' : StackType n' l') -> Type where
   POP : Code (Cons t s) (s)
   -- VAR er spændende. En VAR instruktion skal gøre hvad? skubbe en variabel på jo!
   -- Jeg skal stadig bruge noget der kan finde dens type. det er indexVar.
-  VAR : (i : Fin nat) -> Code s (ConsVar (indexVar i s) s) 
+  --VAR : (i : Fin nat) -> Code s (ConsVar (indexVar i s) s) 
+  -- OBS: en var instruktion efterlader jo selvfølgelig en værdi på stakken, ikke en variabel
+  VAR : (i : Fin nat) -> Code s (Cons (indexVar i s) s) 
 
   --ADDVar : Code () (Cons)
   -- det kan ikke være rigtigt at vi skal definere add flere gange.
   -- det kræver nok bare at en variabel kan hentes somehow, inden den bruges i arith. ja. 
 
+total
 stackVarLookup : (i : Fin n) -> (st : Stack s) -> Val (indexVar i s)
 -- I FZ case har vi nu set alle de variable vi skal og er klar til at returnere næste
 -- i første tilfælde møder vi ikke en var, så vi kalder rekursivt
@@ -125,6 +128,7 @@ stackVarLookup (FS x) (val |> remaining) = stackVarLookup (FS x) remaining
 stackVarLookup (FS x) (var $> remaining) = stackVarLookup x remaining
 
 -- lad os prøve at definere exec.
+total
 exec : (Code s s') -> Stack s -> Stack s'
 exec Skip st = st
 exec (c1 ++ c2) st = exec c2 (exec c1 st)
@@ -134,7 +138,10 @@ exec POP (hd |> st) = st
 -- en variabel instruktion med i indikerer at vi skal finde variabel nummer i på stakken
 -- som jo har n variable, hvor i er Fin n.
 -- så skal vi bruge noge stacklookup igen? ja det er nok det.
-exec (VAR i) st = stackVarLookup i st $> st
+--exec (VAR i) st = stackVarLookup i st $> st
+
+-- marker ikke som variabel - det er bare en værdi
+exec (VAR i) st = stackVarLookup i st |> st
 
 
 -- så kan vi definere compile
@@ -197,10 +204,25 @@ codieWodie (LetExp rhs body) s = ?codieWodie_rhs_6
 codeChangeByExp : (e : Exp context t) -> (s : StackType n l) -> (s' : StackType n' l') -> CodeChangeByType e s s'
 codeChangeByExp e s s' = ?codeChangeByExp_rhs
 
+-- oversættelse af et udtryk efterlader altid en værdi, aldrig en var. derfor er cons t s ok.
+-- jeg har stadig behov for at markere at elementet på toppen af stakken er en variabel, når jeg 
+-- oversætter en let binding.
+compileBetter : {s : StackType n l}  -> Environment context -> (Exp context t) -> Code s (Cons t s)
+compileBetter env (ValExp v) = ?compileBetter_rhs_1
+compileBetter env (PlusExp e1 e2) = ?compileBetter_rhs_2
+compileBetter env (IfExp b e1 e2) = ?compileBetter_rhs_3
+compileBetter env (SubExp e1 e2) = ?compileBetter_rhs_4
+compileBetter env (VarExp x) = ?compileBetter_rhs_5
+compileBetter env (LetExp rhs body) = ?compileBetter_rhs_6
+
+
+
+--compile : Environment context -> (e : Exp context t) -> Code s s'
 -- this is very cool but does not support recursive calls...
 -- i need a function that can give me the code change based on the type...
 -- it really would be nice if this was auto implicit..
 -- also, a function to generate these proofs would also not work, because subexpressions work on substacks, right?
+{-
 compile : Environment context -> (e : Exp context t) -> (change : CodeChangeByType e s s') -> Code s s'
 compile env (ValExp v) ValExpChange = PUSH v
 -- well, siden at jeg bare kan slippe afsted med add her, har jeg jo tydeligvis et problem med def af pluxexpchange...
@@ -214,6 +236,7 @@ compile env (IfExp b e1 e2) change = ?compile_rhs_3
 compile env (SubExp e1 e2) SubExpChange = ?compile_rhs_1
 compile env (VarExp {i} prf) VarExpChange = VAR i
 compile env (LetExp rhs body) LetExpChange = ?compile_rhs_2
+-}
 
 --compile : {s : StackType n l} -> {s' : StackType n' l'} -> Environment context -> (Exp context t) -> Code s s'
 {-
