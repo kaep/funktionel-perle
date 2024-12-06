@@ -208,7 +208,7 @@ codeChangeByExp e s s' = ?codeChangeByExp_rhs
 -- jeg har stadig behov for at markere at elementet på toppen af stakken er en variabel, når jeg 
 -- oversætter en let binding.
 compileBetter : {s : StackType n l}  -> Environment context -> (Exp context t) -> Code s (Cons t s)
-compileBetter env (ValExp v) = ?compileBetter_rhs_1
+compileBetter env (ValExp v) = PUSH v
 compileBetter env (PlusExp e1 e2) = ?compileBetter_rhs_2
 compileBetter env (IfExp b e1 e2) = ?compileBetter_rhs_3
 compileBetter env (SubExp e1 e2) = ?compileBetter_rhs_4
