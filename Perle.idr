@@ -209,17 +209,19 @@ codeChangeByExp : (e : Exp context t) -> (s : StackType n l) -> (s' : StackType 
 codeChangeByExp e s s' = ?codeChangeByExp_rhs
 
 infixr 10 :|:
-data CompileEnvironment : Vect n TyExp -> Type where
-  NilCompEnv : CompileEnvironment Nil
-  (:|:) : (t : TyExp) -> CompileEnvironment context -> CompileEnvironment (t :: context)
+data CompileEnvironment : (n : Nat) -> Vect n TyExp -> Type where
+  NilCompEnv : CompileEnvironment 0 Nil
+  (:|:) : (t : TyExp) -> CompileEnvironment n context -> CompileEnvironment (S n) (t :: context)
 
 
+{-
 total
 lookupT : HasType i context t -> CompileEnvironment context -> TyExp
 lookupT Stop (t :|: _) = t
 lookupT (Pop x) (_ :|: tail) = lookupT x tail
 --lookupT Stop (head :: tail) = head
 --lookupT (Pop x) (head :: tail) = lookup x tail
+-}
 
 -- er dette problematisk fordi jeg kan returnere vilkårlige tyexp?
 total
@@ -231,6 +233,25 @@ total
 extractExprType : (Exp context t) -> TyExp
 extractExprType {t} exp = t
 
+total
+contextIdxToStackIdxHelper : (counter : Nat) -> (ctx_idx : Fin n) -> (s : StackType n l) -> Nat
+-- vi har set alle variable vi skal men er ved en værdi,
+-- vi kalder rekursivt
+contextIdxToStackIdxHelper counter FZ (Cons _ rest) = contextIdxToStackIdxHelper (S counter) FZ rest
+-- vi har set alle variable vi skal og møder en, her giver vi counter tilbage
+-- fordi vi er nået til det index i stakken vi skal bruge
+contextIdxToStackIdxHelper counter FZ (ConsVar _ _) = counter
+-- vi er en værdi, men er ikke færdige endnu
+-- der er stadig ligeså mange variable
+contextIdxToStackIdxHelper counter (FS next) (Cons _ rest) = contextIdxToStackIdxHelper (S counter) (FS next) rest
+-- vi ser en variabel, men er ikke færdige endnu
+contextIdxToStackIdxHelper counter (FS next) (ConsVar _ rest) = contextIdxToStackIdxHelper (S counter) next rest
+
+total
+contextIdxToStackIdx : (ctx_idx : Fin n) -> (s : StackType n l) -> Nat
+contextIdxToStackIdx ctx_idx s = contextIdxToStackIdxHelper 0 ctx_idx s
+
+
 -- dette er problematisk fordi jeg jo har behov for værdier
 -- og ikke bare typer, når jeg pusher ifm. VAR.
 -- men jeg kan lave en PUSHVAR instruktion som
@@ -238,15 +259,44 @@ extractExprType {t} exp = t
 -- ja det kan jeg godt, men så får jeg et problem i exec fordi
 -- jeg jo netop har behov for værdier og ikke kun typer, når
 -- jeg skal skubbe på stakken...
-{-
-compileHanzo : CompileEnvironment context -> (Exp context t) -> Code s (Cons t s)
+-- MEN! jeg skal ikke skubbe værdier på stakken ifm var jo..
+compileHanzo : {s : StackType n l} -> CompileEnvironment n context -> (Exp context t) -> Code s (Cons t s)
 compileHanzo env (ValExp v) = PUSH v
 compileHanzo env (PlusExp e1 e2) = compileHanzo env e2 ++ compileHanzo env e1 ++ ADD
 compileHanzo env (IfExp b e1 e2) = ?compileHanzo_rhs_3
 compileHanzo env (SubExp e1 e2) = compileHanzo env e2 ++ compileHanzo env e1 ++ SUB
-compileHanzo env (VarExp prf) = PUSH (lookupT prf env)
+-- stackidx is a nat not bounded by anything.
+-- VAR instruction wants a Fin bounded by "nat" which is not given from anywhere...
+-- i would have to add another arg to stacktype, referring to the total number of elements...
+-- that could/would make sense though...
+compileHanzo {s} env (VarExp {i} prf) = let stackidx = contextIdxToStackIdx i s in ?hund
 compileHanzo env (LetExp rhs body) = ?compileHanzo_rhs_6
--}
+
+data CompTimeEnv : Vect n TyExp -> Type where
+  NilCompTimeEnv : CompTimeEnv Nil
+  CompCons : Val t -> CompTimeEnv context -> CompTimeEnv (t :: context)
+  CompConsVar : (t : TyExp) -> CompTimeEnv context -> CompTimeEnv (t :: context)
+
+-- det går vidst ikke helt det her...
+-- jeg har et bevis for at variablen på det i'te indeks har typen t
+-- i konteksten..
+-- den case jeg mangler herunder handler om, at vi har kigget
+-- igennem og set så mange variable vi skal, så den næste vi finder skal vi
+-- have værdien af. men det går jo ikke, for jeg skal jo bruge en værdi..
+-- så er det bedre at have kontekst og kunne trække "t" ud fra en val t.
+compTimelookupVal : HasType i context t -> CompTimeEnv context -> Val t
+compTimelookupVal Stop (CompCons val _) = val
+compTimelookupVal Stop (CompConsVar t x) = ?erer
+compTimelookupVal (Pop x) (CompCons hd rest) = compTimelookupVal x rest
+compTimelookupVal (Pop x) (CompConsVar u y) = compTimelookupVal x y
+
+compileTheNewest : CompTimeEnv context -> (Exp context t) -> Code s (Cons t s)
+compileTheNewest env (ValExp v) = PUSH v
+compileTheNewest env (PlusExp e1 e2) = compileTheNewest env e2 ++ compileTheNewest env e1 ++ ADD
+compileTheNewest env (IfExp b e1 e2) = ?compileTheNewest_rhs_3
+compileTheNewest env (SubExp e1 e2) = compileTheNewest env e2 ++ compileTheNewest env e1 ++ SUB
+compileTheNewest env (VarExp x) = ?compileTheNewest_rhs_5
+compileTheNewest env (LetExp rhs body) = ?compileTheNewest_rhs_6
 
 -- oversættelse af et udtryk efterlader altid en værdi, aldrig en var. derfor er cons t s ok.
 -- jeg har stadig behov for at markere at elementet på toppen af stakken er en variabel, når jeg 
@@ -258,7 +308,9 @@ compileBetter env (PlusExp e1 e2) = compileBetter env e2 ++ compileBetter env e1
 compileBetter env (SubExp e1 e2) = compileBetter env e2 ++ compileBetter env e1 ++ SUB
 -- hvordan oversættes et varexp?
 -- Vi finder variablen og skubber den på stakken.
-compileBetter env (VarExp prf) = PUSH (lookup prf env)
+-- nej vi gør da ej? vi skal have en "VAR i" instruktion, skal vi ikke?
+--compileBetter env (VarExp prf) = PUSH (lookup prf env)
+compileBetter env (VarExp prf) = ?hulvar
 -- hvad gør en let binding?
 -- compile rhs og ++ det med compile body men hvor 
 -- en var nu er øverst på stakken
