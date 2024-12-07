@@ -110,6 +110,7 @@ data Code : (s : StackType n l) -> (s' : StackType n' l') -> Type where
   --VAR : (i : Fin nat) -> Code s (ConsVar (indexVar i s) s) 
   -- OBS: en var instruktion efterlader jo selvfølgelig en værdi på stakken, ikke en variabel
   VAR : (i : Fin nat) -> Code s (Cons (indexVar i s) s) 
+  --PUSHVAR : (t : TyExp) -> Code s (ConsVar t s)
 
   --ADDVar : Code () (Cons)
   -- det kan ikke være rigtigt at vi skal definere add flere gange.
@@ -144,6 +145,7 @@ exec POP (hd |> st) = st
 
 -- marker ikke som variabel - det er bare en værdi
 exec (VAR i) st = stackVarLookup i st |> st
+--exec (PUSHVAR ty) st = ?pushvarhul
 
 
 -- så kan vi definere compile
@@ -206,6 +208,46 @@ codieWodie (LetExp rhs body) s = ?codieWodie_rhs_6
 codeChangeByExp : (e : Exp context t) -> (s : StackType n l) -> (s' : StackType n' l') -> CodeChangeByType e s s'
 codeChangeByExp e s s' = ?codeChangeByExp_rhs
 
+infixr 10 :|:
+data CompileEnvironment : Vect n TyExp -> Type where
+  NilCompEnv : CompileEnvironment Nil
+  (:|:) : (t : TyExp) -> CompileEnvironment context -> CompileEnvironment (t :: context)
+
+
+total
+lookupT : HasType i context t -> CompileEnvironment context -> TyExp
+lookupT Stop (t :|: _) = t
+lookupT (Pop x) (_ :|: tail) = lookupT x tail
+--lookupT Stop (head :: tail) = head
+--lookupT (Pop x) (head :: tail) = lookup x tail
+
+-- er dette problematisk fordi jeg kan returnere vilkårlige tyexp?
+total
+extractType : HasType i context t -> Environment context -> TyExp
+extractType {t} Stop (hd :: tail) = t
+extractType (Pop next_prf) (_ :: tail) = extractType next_prf tail
+
+total
+extractExprType : (Exp context t) -> TyExp
+extractExprType {t} exp = t
+
+-- dette er problematisk fordi jeg jo har behov for værdier
+-- og ikke bare typer, når jeg pusher ifm. VAR.
+-- men jeg kan lave en PUSHVAR instruktion som
+-- udvider stacktype uden at tage en val?
+-- ja det kan jeg godt, men så får jeg et problem i exec fordi
+-- jeg jo netop har behov for værdier og ikke kun typer, når
+-- jeg skal skubbe på stakken...
+{-
+compileHanzo : CompileEnvironment context -> (Exp context t) -> Code s (Cons t s)
+compileHanzo env (ValExp v) = PUSH v
+compileHanzo env (PlusExp e1 e2) = compileHanzo env e2 ++ compileHanzo env e1 ++ ADD
+compileHanzo env (IfExp b e1 e2) = ?compileHanzo_rhs_3
+compileHanzo env (SubExp e1 e2) = compileHanzo env e2 ++ compileHanzo env e1 ++ SUB
+compileHanzo env (VarExp prf) = PUSH (lookupT prf env)
+compileHanzo env (LetExp rhs body) = ?compileHanzo_rhs_6
+-}
+
 -- oversættelse af et udtryk efterlader altid en værdi, aldrig en var. derfor er cons t s ok.
 -- jeg har stadig behov for at markere at elementet på toppen af stakken er en variabel, når jeg 
 -- oversætter en let binding.
@@ -228,7 +270,20 @@ compileBetter env (VarExp prf) = PUSH (lookup prf env)
 -- med VarExp hvor jeg har behov for lookup, ikke?
 -- og jeg kan jo ikke bruge en stacktype alene til at at slå noget op vel?
 -- MEN, code beskæftiger sig jo ikke med værdier, kun typer. right?
-compileBetter env (LetExp rhs {t'} body) = ?hul --let rhs' = compileBetter env rhs in let body' = compileBetter (t' :: env) body in ?hul
+-- hvis jeg skal udvide Environment context SKAL jeg bruge en værdi. men kontekst alene
+-- er jo bare typer...
+-- men jeg skal jo give env med i det rekursive kald..
+compileBetter {context} env (LetExp rhs {t'} body) = 
+  -- compile rhs in the given context/environment
+  let rhs' = compileBetter env rhs in
+  -- rhs_type er ikke nok, jeg har behov for en værdi for at udvide context...
+  let rhs_type = extractExprType rhs in
+  -- then compile body with the expanded context from rhs.
+  -- BUT: Environment concerns values... i need something non-value, only types..
+  let body' = compileBetter ?envhul body in ?hamburger
+  --let hanzo = t' :: context in let hammi = compileBetter hanzo body in ?hhweww
+  
+  --let rhs' = compileBetter env rhs in let body' = compileBetter (t' :: env) body in ?hul
   --let rhs' = compileBetter env rhs in ?huller
 
 total
@@ -247,7 +302,7 @@ compileyWiley (PlusExp e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++ ADD
 --compileyWiley (IfExp b e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++SUB 
 compileyWiley (SubExp e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++ SUB
 compileyWiley {s} (VarExp {i} prf) = ?wewe --let idx = indexVar i s in ?hullets --let lookie = stackTypeVarLookup i s in ?hulanp
-compileyWiley (LetExp rhs body) = ?compileyWiley_rhs_6
+compileyWiley {context} (LetExp rhs {t'} body) = ?hamburger --compileyWiley rhs ++ compileyWiley body
 
 
 --compile : Environment context -> (e : Exp context t) -> Code s s'
