@@ -103,6 +103,7 @@ data Code : (s : StackType n l) -> (s' : StackType n' l') -> Type where
   (++) : (c1 : Code s0 s1) -> (c2 : Code s1 s2) -> Code s0 s2
   PUSH : (v : Val t) -> Code s (Cons t s)
   ADD : Code (Cons Tnat (Cons Tnat s)) (Cons Tnat s)
+  SUB : Code (Cons Tnat (Cons Tnat s)) (Cons Tnat s)
   POP : Code (Cons t s) (s)
   -- VAR er spændende. En VAR instruktion skal gøre hvad? skubbe en variabel på jo!
   -- Jeg skal stadig bruge noget der kan finde dens type. det er indexVar.
@@ -134,6 +135,7 @@ exec Skip st = st
 exec (c1 ++ c2) st = exec c2 (exec c1 st)
 exec (PUSH v) st = v |> st
 exec ADD (n |> m |> st) = (n+m) |> st
+exec SUB (n |> m |> st) = (minus n m) |> st
 exec POP (hd |> st) = st
 -- en variabel instruktion med i indikerer at vi skal finde variabel nummer i på stakken
 -- som jo har n variable, hvor i er Fin n.
@@ -207,14 +209,44 @@ codeChangeByExp e s s' = ?codeChangeByExp_rhs
 -- oversættelse af et udtryk efterlader altid en værdi, aldrig en var. derfor er cons t s ok.
 -- jeg har stadig behov for at markere at elementet på toppen af stakken er en variabel, når jeg 
 -- oversætter en let binding.
-compileBetter : {s : StackType n l}  -> Environment context -> (Exp context t) -> Code s (Cons t s)
+compileBetter : Environment context -> (Exp context t) -> Code s (Cons t s)
 compileBetter env (ValExp v) = PUSH v
-compileBetter env (PlusExp e1 e2) = ?compileBetter_rhs_2
-compileBetter env (IfExp b e1 e2) = ?compileBetter_rhs_3
-compileBetter env (SubExp e1 e2) = ?compileBetter_rhs_4
-compileBetter env (VarExp x) = ?compileBetter_rhs_5
-compileBetter env (LetExp rhs body) = ?compileBetter_rhs_6
+compileBetter env (PlusExp e1 e2) = compileBetter env e2 ++ compileBetter env e1 ++ ADD
+--compileBetter env (IfExp b e1 e2) = ?compileBetter_rhs_3
+compileBetter env (SubExp e1 e2) = compileBetter env e2 ++ compileBetter env e1 ++ SUB
+-- hvordan oversættes et varexp?
+-- Vi finder variablen og skubber den på stakken.
+compileBetter env (VarExp prf) = PUSH (lookup prf env)
+-- hvad gør en let binding?
+-- compile rhs og ++ det med compile body men hvor 
+-- en var nu er øverst på stakken
+-- uuh men også environment jo.
+-- hmm. t' er jo en type og ikke en værdi, så den kan jeg ikke lægge i konteksten.. 
+-- mit problem lige nu er at jeg ikke kan udvide kontekst ordentligt.
+-- MEN! jeg behøver vel heller ikke kontekst til compile, gør jeg?
+-- Kan jeg droppe kontekst helt? nej nok ikke, for så får jeg et problem
+-- med VarExp hvor jeg har behov for lookup, ikke?
+-- og jeg kan jo ikke bruge en stacktype alene til at at slå noget op vel?
+-- MEN, code beskæftiger sig jo ikke med værdier, kun typer. right?
+compileBetter env (LetExp rhs {t'} body) = ?hul --let rhs' = compileBetter env rhs in let body' = compileBetter (t' :: env) body in ?hul
+  --let rhs' = compileBetter env rhs in ?huller
 
+total
+stackTypeVarLookup : (i : Fin n) -> (s : StackType n l) -> TyExp
+stackTypeVarLookup FZ (Cons _ remaining) = stackTypeVarLookup FZ remaining
+stackTypeVarLookup FZ (ConsVar t _) = t
+stackTypeVarLookup (FS next) (Cons _ remaining) = stackTypeVarLookup (FS next) remaining
+stackTypeVarLookup (FS next) (ConsVar _ remaining) = stackTypeVarLookup next remaining
+
+-- er det bedre hvis jeg helt fjerner context fra exp? og giver det som eksplicit arg
+-- ifm. var?
+compileyWiley : (Exp context t) -> Code s (Cons t s)
+compileyWiley (ValExp v) = PUSH v
+compileyWiley (PlusExp e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++ ADD
+--compileyWiley (IfExp b e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++SUB 
+compileyWiley (SubExp e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++ SUB
+compileyWiley {s} (VarExp {i} prf) = ?wewe --let idx = indexVar i s in ?hullets --let lookie = stackTypeVarLookup i s in ?hulanp
+compileyWiley (LetExp rhs body) = ?compileyWiley_rhs_6
 
 
 --compile : Environment context -> (e : Exp context t) -> Code s s'
