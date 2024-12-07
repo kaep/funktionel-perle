@@ -240,6 +240,7 @@ stackTypeVarLookup (FS next) (ConsVar _ remaining) = stackTypeVarLookup next rem
 
 -- er det bedre hvis jeg helt fjerner context fra exp? og giver det som eksplicit arg
 -- ifm. var?
+-- jeg har jo behov for kontekst og beviset for at kunne forene typerne ifm. et var opslag..
 compileyWiley : (Exp context t) -> Code s (Cons t s)
 compileyWiley (ValExp v) = PUSH v
 compileyWiley (PlusExp e1 e2) = compileyWiley e2 ++ compileyWiley e1 ++ ADD
