@@ -193,3 +193,10 @@ correct (PlusExp l r) st =
             plusLemma l r (Except n st) | Nothing with (eval r)
                 plusLemma l r (Except n st) | Nothing | Just y = Refl
                 plusLemma l r (Except n st) | Nothing | Nothing = Refl
+
+{-
+λΠ> let prog = Catch (PlusExp (ValExp 3) (Catch (Throw) (ValExp 8))) (PlusExp (ValExp 5) (ValExp 42)) in execCode (compile prog) (Normal [])
+Normal (Cons 11 []) : State [Val TNat]
+λΠ> let prog = Catch (PlusExp (ValExp 3) (Catch (Throw) (Throw))) (PlusExp (ValExp 5) (ValExp 42)) in execCode (compile prog) (Normal [])
+Normal (Cons 47 []) : State [Val TNat]
+-}
