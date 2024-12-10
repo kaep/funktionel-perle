@@ -325,11 +325,13 @@ compileBetter env (VarExp prf) = ?hulvar
 -- hvis jeg skal udvide Environment context SKAL jeg bruge en værdi. men kontekst alene
 -- er jo bare typer...
 -- men jeg skal jo give env med i det rekursive kald..
-compileBetter {context} env (LetExp rhs {t'} body) = 
+compileBetter {context} env (LetExp rhs {t} {t'} body) = 
   -- compile rhs in the given context/environment
   let rhs' = compileBetter env rhs in
   -- rhs_type er ikke nok, jeg har behov for en værdi for at udvide context...
   let rhs_type = extractExprType rhs in
+  let hanzobob = rhs_type :: context in
+  let ny_context = t :: context in
   -- then compile body with the expanded context from rhs.
   -- BUT: Environment concerns values... i need something non-value, only types..
   let body' = compileBetter ?envhul body in ?hamburger
