@@ -36,10 +36,8 @@ data Code : (typ : List StackValue) -> (typ' : List StackValue) -> Type where
     ADD : Code (STemp :: STemp :: typ) (STemp :: typ)
     VAR : (idx : Fin (countSBound typ)) -> Code typ (STemp :: typ)
     LET : (rhs_code : Code typ (STemp :: typ)) -> (body_code : Code (SBound :: typ) (STemp :: typ)) -> Code typ (STemp :: typ)
-    --POPBODY : Code (SBound :: typ) (STemp :: SBound :: typ) -> Code (SBound :: typ) (STemp :: typ)
     POP : Code (top :: typ) typ 
     SWAP : Code (top :: next :: typ) (next :: top :: typ)
-    --POPVAR : Code (STemp :: SBound :: typ) (STemp :: typ)
 
 total
 indexStack : (idx : Fin vars) -> (Stack typ vars) -> Nat
