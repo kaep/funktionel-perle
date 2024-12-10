@@ -68,15 +68,7 @@ compile : (Exp (countSBound typ)) -> Code typ (STemp :: typ)
 compile (ValExp v) = PUSH v
 compile (PlusExp n m) = compile n ++ compile m ++ ADD
 compile (VarExp idx) = VAR idx
---compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in LET rhs' ?final --LET rhs' body' 
 compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in 
-    --let hamzo = LET rhs' body' in ?final
-    --let hanni = (compile {typ = SBound :: typ} body) ++ POP in
     let swapped = body' ++ SWAP in
     let popped = swapped ++ POP in
-    --let hamza = popped ++ rhs' in
-    let letted = LET rhs' popped in
-    letted 
-
-
---let rhs' = compile rhs in ?erer --let body' = compile body in ?er --LET rhs' body'
+    LET rhs' popped
