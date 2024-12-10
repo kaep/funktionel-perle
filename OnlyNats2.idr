@@ -92,8 +92,10 @@ mutual
     -- to show that y indeed does equal n in this case..
     indexing {idx = FZ} {evalEnv = (y :: [])} {st = (n $> x)} = ?hul_1
     -- 
-    indexing {idx = FZ} {evalEnv = (y :: (z :: xs))} {st = (n $> x)} = ?hul_5
-    indexing {idx = (FS y)} {evalEnv = evalEnv} {st = (n $> x)} = ?hul_2
+    indexing {idx = FZ} {evalEnv = (y :: (z :: xs))} {st = (n $> x)} = Refl
+    -- recursive case for stack with variable top
+    -- we should be able to use next and both tails because we saw var, but no..
+    indexing {idx = (FS next)} {evalEnv = (_ :: xs)} {st = (_ $> x)} = ?hw--indexing {idx = next} {evalEnv = xs} {st = x}
 
     correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (evalEnv : Vect (countSBound typ) Nat) -> ((eval evalEnv e) |> st) = exec (compile e) st
     correct (ValExp v) st evalEnv = Refl
