@@ -71,10 +71,32 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
     let popped = swapped ++ POP in
     LET rhs' popped
 
+mutual
+    indexing : (index idx evalEnv) |> st = (indexStack idx st) |> st
+    -- index zero but empty env and stack, this is impossible
+    indexing {idx = FZ} {evalEnv = []} {st = EmptyStack} impossible
+    -- index non-zero but empty env and stack, this is impossible
+    indexing {idx = (FS _)} {evalEnv = []} {st = EmptyStack} impossible
+    -- we have elements in both env and stack
+    -- and stack has a value not a var
+    indexing {idx = FZ} {evalEnv = (y :: xs)} {st = (_ |> x)} = ?hul 
+    indexing {idx = (FS y)} {evalEnv = evalEnv} {st = (n |> x)} = ?hul_4
+    -- we have elements in both env and stack
+    -- and stack has a var not a value
 
-total
-correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (evalEnv : Vect (countSBound typ) Nat) -> ((eval evalEnv e) |> st) = exec (compile e) st
-correct (ValExp v) st evalEnv = Refl
-correct (PlusExp x y) st evalEnv = ?correct_rhs_2
-correct (VarExp idx) st evalEnv = ?correct_rhs_3
-correct (LetExp rhs body) st evalEnv = ?correct_rhs_4
+    -- when the index is FZ we need the final var.
+    -- we need convince idris that y = n here, but that wont be possible right?
+    -- because y is not the final element? case split xs!
+    -- now we know that y is the final element and that n is the final variable (because "vars" of x is 0)
+    -- we just need some lemma
+    -- to show that y indeed does equal n in this case..
+    indexing {idx = FZ} {evalEnv = (y :: [])} {st = (n $> x)} = ?hul_1
+    -- 
+    indexing {idx = FZ} {evalEnv = (y :: (z :: xs))} {st = (n $> x)} = ?hul_5
+    indexing {idx = (FS y)} {evalEnv = evalEnv} {st = (n $> x)} = ?hul_2
+
+    correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (evalEnv : Vect (countSBound typ) Nat) -> ((eval evalEnv e) |> st) = exec (compile e) st
+    correct (ValExp v) st evalEnv = Refl
+    correct (PlusExp x y) st evalEnv = ?correct_rhs_2
+    correct (VarExp idx) st evalEnv = indexing
+    correct (LetExp rhs body) st evalEnv = ?correct_rhs_4
