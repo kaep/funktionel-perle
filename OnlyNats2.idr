@@ -36,9 +36,9 @@ data Code : (typ : List StackValue) -> (typ' : List StackValue) -> Type where
     ADD : Code (STemp :: STemp :: typ) (STemp :: typ)
     VAR : (idx : Fin (countSBound typ)) -> Code typ (STemp :: typ)
     LET : (rhs_code : Code typ (STemp :: typ)) -> (body_code : Code (SBound :: typ) (STemp :: typ)) -> Code typ (STemp :: typ)
-    POPBODY : Code (SBound :: typ) (STemp :: SBound :: typ) -> Code (SBound :: typ) (STemp :: typ)
-    --POP : Code (top :: typ) typ 
-    --SWAP : Code (top :: next :: typ) (next :: top :: typ)
+    --POPBODY : Code (SBound :: typ) (STemp :: SBound :: typ) -> Code (SBound :: typ) (STemp :: typ)
+    POP : Code (top :: typ) typ 
+    SWAP : Code (top :: next :: typ) (next :: top :: typ)
     --POPVAR : Code (STemp :: SBound :: typ) (STemp :: typ)
 
 total
@@ -56,18 +56,12 @@ exec (PUSH n) st = n |> st
 exec ADD (n |> m |> st) = (n+m) |> st
 exec (VAR idx) st = let found = indexStack idx st in found |> st
 exec (LET rhs_code body_code) st = let (val |> st')  = exec rhs_code st in exec body_code (val $> st')
-exec (POPBODY body) st = ?stsd
---exec POPVAR (val |> var $> st) = val |> st
---exec POP (hd |> st) = st
---exec POP (hd $> st) = st
---exec SWAP (hd |> next |> st) = (next |> hd |> st)
-
-total
-remove : Code (SBound :: typ) (STemp :: SBound :: typ) -> Code (SBound :: typ) (STemp :: typ)
-remove (c1 ++ c2) = ?remove_rhs_1
-remove (PUSH n) = ?remove_rhs_2
-remove (VAR idx) = ?remove_rhs_3
-remove (LET rhs_code body_code) = ?remove_rhs_4
+exec POP (_ |> tail) = tail
+exec POP (_ $> tail) = tail
+exec SWAP (hd |> next $> tail) = next $> hd |> tail
+exec SWAP (hd |> next |> tail) = next |> hd |> tail
+exec SWAP (hd $> next $> tail) = next $> hd $> tail
+exec SWAP (hd $> next |> tail) = next |> hd $> tail
 
 total
 compile : (Exp (countSBound typ)) -> Code typ (STemp :: typ)
@@ -75,7 +69,14 @@ compile (ValExp v) = PUSH v
 compile (PlusExp n m) = compile n ++ compile m ++ ADD
 compile (VarExp idx) = VAR idx
 --compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in LET rhs' ?final --LET rhs' body' 
-compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in ?final
+compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in 
+    --let hamzo = LET rhs' body' in ?final
+    --let hanni = (compile {typ = SBound :: typ} body) ++ POP in
+    let swapped = body' ++ SWAP in
+    let popped = swapped ++ POP in
+    --let hamza = popped ++ rhs' in
+    let letted = LET rhs' popped in
+    letted 
 
 
 --let rhs' = compile rhs in ?erer --let body' = compile body in ?er --LET rhs' body'
