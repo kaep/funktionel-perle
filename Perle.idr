@@ -197,6 +197,11 @@ correct (PlusExp l r) st =
 {-
 λΠ> let prog = Catch (PlusExp (ValExp 3) (Catch (Throw) (ValExp 8))) (PlusExp (ValExp 5) (ValExp 42)) in execCode (compile prog) (Normal [])
 Normal (Cons 11 []) : State [Val TNat]
+
 λΠ> let prog = Catch (PlusExp (ValExp 3) (Catch (Throw) (Throw))) (PlusExp (ValExp 5) (ValExp 42)) in execCode (compile prog) (Normal [])
 Normal (Cons 47 []) : State [Val TNat]
+
+λΠ> let brog = Catch (PlusExp (ValExp 3) (Catch (Throw) (Throw))) (Throw) in execCode (compile brog) (Normal [])
+Except 0 [] : State [Val TNat]
+
 -}
