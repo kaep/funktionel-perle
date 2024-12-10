@@ -70,3 +70,11 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
     let swapped = body' ++ SWAP in
     let popped = swapped ++ POP in
     LET rhs' popped
+
+
+total
+correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (evalEnv : Vect (countSBound typ) Nat) -> ((eval evalEnv e) |> st) = exec (compile e) st
+correct (ValExp v) st evalEnv = Refl
+correct (PlusExp x y) st evalEnv = ?correct_rhs_2
+correct (VarExp idx) st evalEnv = ?correct_rhs_3
+correct (LetExp rhs body) st evalEnv = ?correct_rhs_4
