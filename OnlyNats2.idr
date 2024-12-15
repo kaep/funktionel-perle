@@ -26,6 +26,11 @@ letExample = LetExp (ValExp 2) (PlusExp (VarExp 0) (ValExp 40))
 letEval : Nat
 letEval = eval [] letExample
 
+nestedLetExample : Exp 0
+nestedLetExample = LetExp (ValExp 2) (LetExp (ValExp 40) (PlusExp (VarExp 0) (VarExp 1)))
+nestedLetEval : Nat
+nestedLetEval = eval [] nestedLetExample
+
 data StackValue = STemp | SBound
 
 infixr 10 |>
@@ -105,6 +110,12 @@ letComp = compile letExample
 letExec : Stack [STemp] 0
 letExec = exec letComp EmptyStack
 
+
+nestedLetComp : Code [] [STemp]
+nestedLetComp = compile nestedLetExample
+
+nestedLetExec : Stack [STemp] 0
+nestedLetExec = exec nestedLetComp EmptyStack
 
 mutual
     indexing : (index idx evalEnv) |> st = (indexStack idx st) |> st
