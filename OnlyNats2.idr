@@ -83,8 +83,27 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
     let popped = swapped ++ POP in
     LET rhs' popped
 
--- kan vi rent faktisk danne udtryk som kan oversættes og bytekode-fortolkes til værdier?
+-- Compiling plusExample from earlier 
+-- results in code that goes from nothing to a single STemp on the stack
+plusComp : Code [] [STemp]
+plusComp = compile plusExample
 
+-- Same applies here
+-- the resulting stack has 0 bindings and a single value
+-- Using the REPL we can observe that this
+-- results in ```42 |> EmptyStack``
+plusExec : Stack [STemp] 0
+plusExec = exec plusComp EmptyStack
+
+-- Compiling letExample is the same
+-- as the let binding goes out of scope
+letComp : Code [] [STemp]
+letComp = compile letExample
+
+-- Using the REPL we can observe that this
+-- results in ```42 |> EmptyStack``
+letExec : Stack [STemp] 0
+letExec = exec letComp EmptyStack
 
 
 mutual
