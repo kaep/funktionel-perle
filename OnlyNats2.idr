@@ -14,6 +14,18 @@ eval st (PlusExp e1 e2) = eval st e1 + eval st e2
 eval st (VarExp idx) = index idx st
 eval st (LetExp rhs body) = let rhs' = eval st rhs in eval (rhs' :: st) body
 
+plusExample : Exp 0
+plusExample = PlusExp (ValExp 40) (ValExp 2)
+plusEval : Nat
+plusEval = eval [] plusExample
+
+-- The let binding goes out of scope
+-- which is why the binding count is 0
+letExample : Exp 0
+letExample = LetExp (ValExp 2) (PlusExp (VarExp 0) (ValExp 40))
+letEval : Nat
+letEval = eval [] letExample
+
 data StackValue = STemp | SBound
 
 infixr 10 |>
@@ -72,6 +84,8 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
     LET rhs' popped
 
 -- kan vi rent faktisk danne udtryk som kan oversættes og bytekode-fortolkes til værdier?
+
+
 
 mutual
     indexing : (index idx evalEnv) |> st = (indexStack idx st) |> st
