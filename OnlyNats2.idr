@@ -71,6 +71,8 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
     let popped = swapped ++ POP in
     LET rhs' popped
 
+-- kan vi rent faktisk danne udtryk som kan oversættes og bytekode-fortolkes til værdier?
+
 mutual
     indexing : (index idx evalEnv) |> st = (indexStack idx st) |> st
     -- index zero but empty env and stack, this is impossible
@@ -92,7 +94,7 @@ mutual
     -- to show that y indeed does equal n in this case..
     indexing {idx = FZ} {evalEnv = (y :: [])} {st = (n $> x)} = ?hul_1
     -- 
-    indexing {idx = FZ} {evalEnv = (y :: (z :: xs))} {st = (n $> x)} = Refl
+    indexing {idx = FZ} {evalEnv = (y :: (z :: xs))} {st = (n $> x)} = ?hul_5
     -- recursive case for stack with variable top
     -- we should be able to use next and both tails because we saw var, but no..
     indexing {idx = (FS next)} {evalEnv = (_ :: xs)} {st = (_ $> x)} = ?hw--indexing {idx = next} {evalEnv = xs} {st = x}
