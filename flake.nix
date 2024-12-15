@@ -14,7 +14,9 @@
     devShells = forEachSupportedSystem ({pkgs}: {
       default = pkgs.mkShell {
         packages = with pkgs; [
-          idris
+	        idris
+          idris2
+	        idris2Packages.idris2Lsp
         ];
       };
     });
