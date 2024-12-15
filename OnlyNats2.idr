@@ -41,6 +41,26 @@ data Stack : List StackValue -> Nat -> Type where
     ($>) : (n : Nat) -> Stack typ vars -> Stack (SBound :: typ) (S vars)
 
 total
+nextVar : (s : Stack typ (S count)) -> Nat 
+nextVar (_ |> x) = nextVar x
+nextVar (var $> _) = var
+
+-- Denne funktion er vel egentlig for generel, er den ikke?
+-- den vil jo også være korrekt hvis jeg bare returnerer emptylist
+-- hele tiden..
+total
+typAfterVarPop : List StackValue -> List StackValue
+typAfterVarPop [] = []
+typAfterVarPop (STemp :: tail) = typAfterVarPop tail
+typAfterVarPop (SBound :: tail) = tail
+
+
+total
+varTail : (s : Stack typ (S varCount)) -> Stack (typAfterVarPop typ) varCount
+varTail (_ |> tail) = varTail tail
+varTail (_ $> tail) = tail
+
+total
 countSBound : (List StackValue) -> Nat
 countSBound [] = 0
 countSBound (STemp :: tail) = countSBound tail
@@ -81,7 +101,7 @@ exec SWAP (hd $> next |> tail) = next |> hd $> tail
 total
 compile : (Exp (countSBound typ)) -> Code typ (STemp :: typ)
 compile (ValExp v) = PUSH v
-compile (PlusExp n m) = compile n ++ compile m ++ ADD
+compile (PlusExp n m) = compile m ++ compile n ++ ADD
 compile (VarExp idx) = VAR idx
 compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in 
     let swapped = body' ++ SWAP in
@@ -117,6 +137,38 @@ nestedLetComp = compile nestedLetExample
 nestedLetExec : Stack [STemp] 0
 nestedLetExec = exec nestedLetComp EmptyStack
 
+-- TODO skal det være deceq?
+-- jeg kan jo ikke implementere deceq for to helt vilkårlige typer som
+-- Vect c Nat og Stack typ c...
+-- men jeg kan eventuelt bruge en type der afhænger af denne funktion, ligesom simon gay?
+-- men det er jo ikke så idris-lækkert...
+-- jeg har behov for en type jo..
+total
+evalEnvIsTheSameAsStack : (evalEnv : Vect c Nat) ->  (st : Stack typ c) -> Bool
+-- Base case: both are empty, they are the same
+evalEnvIsTheSameAsStack [] EmptyStack = True
+-- Empty evaluation environment and a stack with no more vars, they are the same
+evalEnvIsTheSameAsStack [] (n |> emptyTail) = True
+-- Here envHead and next var in the stack must be equal && the tails 
+evalEnvIsTheSameAsStack (envHead :: envTail) (_ |> stackTail) = let next = nextVar stackTail in (envHead == next) && evalEnvIsTheSameAsStack envTail (varTail stackTail)
+-- Here heads must be equal && the tails must be equal
+evalEnvIsTheSameAsStack (envHead :: envTail) (stackHead $> stackTail) = (envHead == stackHead) && evalEnvIsTheSameAsStack envTail stackTail
+
+
+data EnvStackProof : (env : Vect c Nat) -> (st : Stack typ c) -> Type where
+    -- The empty env and empty stack are the same
+    NilProof : EnvStackProof [] EmptyStack
+    -- If env and st are the same, then var::env and var $> st are the same
+    VarConsProof : (var : Nat) -> (prevProof : EnvStackProof env st) -> EnvStackProof (var :: env) (var $> st)
+    -- We can add arbitrarily many STemps to the stack without changing the proof
+    SkipProof : (val : Nat) -> (prevProof : EnvStackProof env st) -> EnvStackProof env (val |> st)
+
+-- Can this help idris infer the proof for correct?
+createPrf : (env : Vect c Nat) -> (st: Stack typ c) -> EnvStackProof env st 
+createPrf [] EmptyStack = NilProof
+createPrf (x :: xs) (n |> y) = ?hul
+createPrf (x :: xs) (n $> y) = ?createPrf_rhs_3
+
 mutual
     indexing : (index idx evalEnv) |> st = (indexStack idx st) |> st
     -- index zero but empty env and stack, this is impossible
@@ -143,8 +195,19 @@ mutual
     -- we should be able to use next and both tails because we saw var, but no..
     indexing {idx = (FS next)} {evalEnv = (_ :: xs)} {st = (_ $> x)} = ?hw--indexing {idx = next} {evalEnv = xs} {st = x}
 
+    -- Selvom jeg giver beviset eksplicit er der stadig ikke noget information
+    -- til at udlede at dét gælder for env og st..
+    --correct : (prf : EnvStackProof evalEnv st) -> (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (evalEnv : Vect (countSBound typ) Nat) -> ((eval evalEnv e) |> st) = exec (compile e) st
     correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (evalEnv : Vect (countSBound typ) Nat) -> ((eval evalEnv e) |> st) = exec (compile e) st
     correct (ValExp v) st evalEnv = Refl
-    correct (PlusExp x y) st evalEnv = ?correct_rhs_2
-    correct (VarExp idx) st evalEnv = indexing
+    correct (PlusExp e1 e2) st evalEnv = let lhs = correct e1 ((eval evalEnv e2) |> st) evalEnv
+                                             rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st evalEnv)
+                                         in
+                                            cong {f = \st' => exec ADD st'} (trans lhs rhs)
+    correct (VarExp idx) st evalEnv = ?correct_rhs_3
     correct (LetExp rhs body) st evalEnv = ?correct_rhs_4
+
+    --correct (ValExp v) st evalEnv = Refl
+    --correct (PlusExp x y) st evalEnv = ?correct_rhs_2
+    --correct (VarExp idx) st evalEnv = indexing
+    --correct (LetExp rhs body) st evalEnv = ?correct_rhs_4
