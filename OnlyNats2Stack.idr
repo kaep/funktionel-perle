@@ -37,11 +37,12 @@ dropSTemp (STemp :: xs) = dropSTemp xs
 dropSTemp (SBound :: xs) = SBound :: dropSTemp xs
 
 total
-eval : (Stack typ (countSBound typ)) -> Exp (countSBound typ) -> Nat
-eval st (ValExp v) = v
-eval st (PlusExp e1 e2) = eval st e1 + eval st e2
-eval st (VarExp idx) = indexStack idx st
-eval st (LetExp rhs body) = let rhs' = eval st rhs in eval (rhs' $> st) body
+--eval : (Stack typ (countSBound typ)) -> Exp (countSBound typ) -> Nat
+eval : (Stack typ (countSBound typ)) -> Exp (countSBound typ) -> Stack (STemp :: typ) (countSBound typ)
+eval st (ValExp v) = v |> st
+eval st (PlusExp e1 e2) = let (top |> st) = eval st e1 in let (top' |> st) = eval st e2 in  (top + top') |> st 
+eval st (VarExp idx) = (indexStack idx st) |> st
+eval st (LetExp rhs body) = let (top |> st) = eval st rhs in let (top' |> rhsVar $> st) = (eval (top $> st) body) in top' |> st
 
 data Code : (typ : List StackValue) -> (typ' : List StackValue) -> Type where
     Skip : Code typ typ
@@ -80,54 +81,30 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
 
 
 total
-correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> ((eval st e) |> st) = exec (compile e) st
-correct (ValExp _) st = Refl
-correct (PlusExp e1 e2) st =
-    let temp_eq = sym $ evalWithTemp st e1 (eval st e2) in
-    let lhs = correct e1 ((eval st e2) |> st) in
-    let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st) in
-    let conni = cong {f = \st' => exec ADD st'} (trans lhs rhs) in
-    ?dd
-    --let step1 = cong {f = \x => (plus x (eval st e2)) |> st} temp_eq in
-    --trans step1 conni
+correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> (eval st e) = exec (compile e) st
+correct (ValExp v) st = Refl
+correct (PlusExp e1 e2) st = ?huller
 
-    where
-      evalWithTemp : (st: Stack typ (countSBound typ)) ->
-                    (e: Exp (countSBound typ)) -> (n: Nat) ->
-                    eval (n |> st) e = eval st e
-
-      evalWithTemp st (ValExp x) n = Refl
-      evalWithTemp st (PlusExp x y) n =
-        rewrite evalWithTemp st x n in
-        rewrite evalWithTemp st y n in
-        Refl
-      evalWithTemp st (VarExp idx) n = evalVar idx st
-      where
-        evalVar : (idx : Fin vars) -> (st : Stack typ vars) -> indexStack idx (n |> st) = indexStack idx st
-        evalVar FZ _ = Refl
-        evalVar (FS x) _ = Refl
-
-      evalLetTemp : {typ : List StackValue} ->
-                    (st : Stack typ (countSBound typ)) ->
-                    (rhs : Exp (countSBound typ)) ->
-                    (body : Exp (S (countSBound typ))) ->
-                    (n : Nat) ->
-                    eval (n |> st) (LetExp rhs body) = eval st (LetExp rhs body)
-      evalLetTemp st rhs body n =
-          let rhs_val = eval st rhs in
-          rewrite evalWithTemp st rhs n in
-          rewrite evalWithBound st body rhs_val n in
-          Refl
-      where
-        evalWithBound : (st : Stack typ (countSBound typ)) ->
-                        (body : Exp (S (countSBound typ))) ->
-                        (bound_val : Nat) ->
-                        (n : Nat) ->
-                        eval ((bound_val $> (n |> st))) body = eval (bound_val $> st) body
-
+{-
+correct (PlusExp e1 e2) st with (eval st e1)
+  correct (PlusExp e1 e2) st | (|>) top rest with (eval rest e2)
+    correct (PlusExp e1 e2) st | (|>) top rest | (|>) top' rest' = let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st) in
+      let lhs = correct e1 (eval st e2) in 
+      ?huller
+      -}
 correct (VarExp idx) st = Refl
-correct (LetExp rhs body) st =
-  let rhs_val = eval st rhs in
-  let ih1 = correct rhs st in
-  let ih2 = correct body (rhs_val $> st) in
-  ?blah
+correct (LetExp rhs body) st = ?correct_rhs_4
+{-
+let lhs = correct e1 ((eval evalEnv e2) |> st) evalEnv
+                                             rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st evalEnv)
+                                         in
+                                            cong {f = \st' => exec ADD st'} (trans lhs rhs)
+
+
+                                            
+correct (PlusExp e1 e2) st = let lhs = correct e1 ((eval st e2)) in
+                             let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st) in
+                              let blabber = eval st e1 in
+                             ?baban
+                                         -}
+
