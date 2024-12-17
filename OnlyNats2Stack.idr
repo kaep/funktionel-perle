@@ -3,7 +3,7 @@ import Data.Fin
 
 data Exp : Nat -> Type where
     ValExp : Nat -> Exp c
-    PlusExp : Exp c -> Exp c -> Exp c 
+    PlusExp : Exp c -> Exp c -> Exp c
     VarExp : (idx : Fin c) -> Exp c
     LetExp : (rhs : Exp c)  -> (body : Exp (S c)) -> Exp c
 
@@ -31,12 +31,17 @@ countSBound (STemp :: tail) = countSBound tail
 countSBound (SBound :: tail) = S (countSBound tail)
 
 total
+dropSTemp : List StackValue -> List StackValue
+dropSTemp [] = []
+dropSTemp (STemp :: xs) = dropSTemp xs
+dropSTemp (SBound :: xs) = SBound :: dropSTemp xs
+
+total
 eval : (Stack typ (countSBound typ)) -> Exp (countSBound typ) -> Nat
 eval st (ValExp v) = v
 eval st (PlusExp e1 e2) = eval st e1 + eval st e2
 eval st (VarExp idx) = indexStack idx st
 eval st (LetExp rhs body) = let rhs' = eval st rhs in eval (rhs' $> st) body
-
 
 data Code : (typ : List StackValue) -> (typ' : List StackValue) -> Type where
     Skip : Code typ typ
@@ -45,7 +50,7 @@ data Code : (typ : List StackValue) -> (typ' : List StackValue) -> Type where
     ADD : Code (STemp :: STemp :: typ) (STemp :: typ)
     VAR : (idx : Fin (countSBound typ)) -> Code typ (STemp :: typ)
     LET : (rhs_code : Code typ (STemp :: typ)) -> (body_code : Code (SBound :: typ) (STemp :: typ)) -> Code typ (STemp :: typ)
-    POP : Code (top :: typ) typ 
+    POP : Code (top :: typ) typ
     SWAP : Code (top :: next :: typ) (next :: top :: typ)
 
 total
@@ -68,23 +73,61 @@ compile : (Exp (countSBound typ)) -> Code typ (STemp :: typ)
 compile (ValExp v) = PUSH v
 compile (PlusExp e1 e2) = compile e2 ++ compile e1 ++ ADD
 compile (VarExp idx) = VAR idx
-compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in 
+compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile {typ = SBound :: typ} body in
     let swapped = body' ++ SWAP in
     let popped = swapped ++ POP in
     LET rhs' popped
 
+
 total
 correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> ((eval st e) |> st) = exec (compile e) st
 correct (ValExp _) st = Refl
-correct (PlusExp e1 e2) st = ?hullet
-{-
-    
-    let lhs = correct e1 ((eval st e2) |> st) in 
-                                             let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st)
-                                         in
-                                            let conni = cong {f = \st' => exec ADD st'} (trans lhs rhs)
-                                            in ?hul
-                                         -}
+correct (PlusExp e1 e2) st =
+    let temp_eq = sym $ evalWithTemp st e1 (eval st e2) in
+    let lhs = correct e1 ((eval st e2) |> st) in
+    let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st) in
+    let conni = cong {f = \st' => exec ADD st'} (trans lhs rhs) in
+    ?dd
+    --let step1 = cong {f = \x => (plus x (eval st e2)) |> st} temp_eq in
+    --trans step1 conni
 
-correct (VarExp idx) st = ?correct_rhs_3
-correct (LetExp rhs body) st = ?correct_rhs_4
+    where
+      evalWithTemp : (st: Stack typ (countSBound typ)) ->
+                    (e: Exp (countSBound typ)) -> (n: Nat) ->
+                    eval (n |> st) e = eval st e
+
+      evalWithTemp st (ValExp x) n = Refl
+      evalWithTemp st (PlusExp x y) n =
+        rewrite evalWithTemp st x n in
+        rewrite evalWithTemp st y n in
+        Refl
+      evalWithTemp st (VarExp idx) n = evalVar idx st
+      where
+        evalVar : (idx : Fin vars) -> (st : Stack typ vars) -> indexStack idx (n |> st) = indexStack idx st
+        evalVar FZ _ = Refl
+        evalVar (FS x) _ = Refl
+
+      evalLetTemp : {typ : List StackValue} ->
+                    (st : Stack typ (countSBound typ)) ->
+                    (rhs : Exp (countSBound typ)) ->
+                    (body : Exp (S (countSBound typ))) ->
+                    (n : Nat) ->
+                    eval (n |> st) (LetExp rhs body) = eval st (LetExp rhs body)
+      evalLetTemp st rhs body n =
+          let rhs_val = eval st rhs in
+          rewrite evalWithTemp st rhs n in
+          rewrite evalWithBound st body rhs_val n in
+          Refl
+      where
+        evalWithBound : (st : Stack typ (countSBound typ)) ->
+                        (body : Exp (S (countSBound typ))) ->
+                        (bound_val : Nat) ->
+                        (n : Nat) ->
+                        eval ((bound_val $> (n |> st))) body = eval (bound_val $> st) body
+
+correct (VarExp idx) st = Refl
+correct (LetExp rhs body) st =
+  let rhs_val = eval st rhs in
+  let ih1 = correct rhs st in
+  let ih2 = correct body (rhs_val $> st) in
+  ?blah
