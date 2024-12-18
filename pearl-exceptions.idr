@@ -152,23 +152,28 @@ correct (Catch e h) st =
         catchLemma e h (Except n st) pf | Nothing | Just x = Refl
         catchLemma e h (Except n st) pf | Nothing | Nothing = Refl
 
-correct (PlusExp l r) st =
-  let
-    h_compile = cong {f = execCode (compile l)} (correct r st)
-    h_correct = correct l ((eval r) |>| st)
-  in
-  (execCode (compile r ++ compile l ++ [(ADD)]) st)
-    ={ distribute _ (compile r) _ }=
-  (execCode (compile l ++ [(ADD)]) (execCode (compile r) st))
-    ={ distribute _ (compile l) _ }=
-  (execCode [(ADD)] (execCode (compile l) (execCode (compile r) st)))
-    ={ cong {f = execCode [(ADD)]} h_compile }=
-  (execCode [(ADD)] (execCode (compile l) ((eval r) |>| st)))
-    ={ cong {f = execCode [(ADD)]} h_correct }=
-  (execCode [(ADD)] ((eval l) |>| ((eval r) |>| st)))
-    ={ plusLemma l r st }=
-  ((eval (PlusExp l r)) |>| st)
-  QED
+  correct (PlusExp l r) st =
+    let
+      h_compile = cong {f = execCode (compile l)} (correct r st)
+      h_correct = correct l ((eval r) |>| st)
+      step1 = distribute _ (compile r) _
+      step2 = distribute _ (compile l) _
+      step3 = cong {f = execCode [(ADD)]} h_compile
+      step4 = cong {f = execCode [(ADD)]} h_correct
+      step5 = plusLemma l r st
+    in
+    (execCode (compile r ++ compile l ++ [(ADD)]) st)
+      ={ step1 }=
+    (execCode (compile l ++ [(ADD)]) (execCode (compile r) st))
+      ={ step2 }=
+    (execCode [(ADD)] (execCode (compile l) (execCode (compile r) st)))
+      ={ step3 }=
+    (execCode [(ADD)] (execCode (compile l) ((eval r) |>| st)))
+      ={ step4 }=
+    (execCode [(ADD)] ((eval l) |>| ((eval r) |>| st)))
+      ={ step5 }=
+    ((eval (PlusExp l r)) |>| st)
+    QED
   where
     plusLemma : (l : Exp TNat throws_a) -> (r : Exp TNat throws_b) -> (st : State s)
                 -> execOp ADD ((eval l) |>| ((eval r) |>| st)) = (eval (PlusExp l r)) |>| st
@@ -269,3 +274,30 @@ testProgram5 =
                   (Catch Throw (ValExp 6))))
               (ValExp 7) in
   checkProgram prog
+
+
+simpleExample : Exp TNat False
+simpleExample = Catch
+                  (PlusExp (ValExp 3)
+                          (Catch Throw (ValExp 8)))
+                  (PlusExp (ValExp 5) (ValExp 42))
+
+nestedExample : Exp TNat False
+nestedExample = Catch
+                 (PlusExp
+                   (PlusExp (ValExp 10)
+                           (Catch Throw (ValExp 20)))
+                   (Catch (PlusExp (ValExp 5) Throw)
+                         (ValExp 30)))
+                 (ValExp 100)
+
+uncaughtExample : Exp TNat True
+uncaughtExample = Catch
+                   (PlusExp
+                     (Catch
+                       (PlusExp Throw (ValExp 1))
+                       (PlusExp (ValExp 2) Throw))
+                     (Catch
+                       (PlusExp (ValExp 3) Throw)
+                       (PlusExp Throw (ValExp 4))))
+                   Throw
