@@ -188,14 +188,84 @@ correct (PlusExp l r) st =
         plusLemma l r (Except n st) | Nothing | Nothing = Refl
 
 
-{-
-λΠ> let prog = Catch (PlusExp (ValExp 3) (Catch (Throw) (ValExp 8))) (PlusExp (ValExp 5) (ValExp 42)) in execCode (compile prog) (Normal [])
-Normal (Cons 11 []) : State [Val TNat]
+checkProgram : Exp t b -> Bool
+checkProgram prog =
+  let comp = compile {s = []} prog in
+  case (eval prog, execCode comp (Normal [])) of
+    (Just v1, Normal (v2|>_)) => True
+    (Nothing, Except _ _) => True
+    _ => False
 
-λΠ> let prog = Catch (PlusExp (ValExp 3) (Catch (Throw) (Throw))) (PlusExp (ValExp 5) (ValExp 42)) in execCode (compile prog) (Normal [])
-Normal (Cons 47 []) : State [Val TNat]
+testProgram1 : Bool
+testProgram1 =
+  let prog = Catch
+              (PlusExp
+                (ValExp 3)
+                (Catch
+                  Throw
+                  (ValExp 8)))
+              (PlusExp
+                (ValExp 5)
+                (ValExp 42)) in
+  checkProgram prog
 
-λΠ> let brog = Catch (PlusExp (ValExp 3) (Catch (Throw) (Throw))) (Throw) in execCode (compile brog) (Normal [])
-Except 0 [] : State [Val TNat]
+testProgram2 : Bool
+testProgram2 =
+  let prog = Catch
+              (PlusExp
+                (PlusExp
+                  (ValExp 10)
+                  (Catch Throw (ValExp 20)))
+                (Catch
+                  (PlusExp (ValExp 5) Throw)
+                  (ValExp 30)))
+              (ValExp 100) in
+  checkProgram prog
 
--}
+testProgram3 : Bool
+testProgram3 =
+  let prog = Catch
+              (PlusExp
+                (Catch
+                  (PlusExp Throw (ValExp 1))
+                  (PlusExp (ValExp 2) Throw))
+                (Catch
+                  (PlusExp (ValExp 3) Throw)
+                  (PlusExp Throw (ValExp 4))))
+              Throw in
+  checkProgram prog
+
+testProgram4 : Bool
+testProgram4 =
+  let prog = PlusExp
+              (Catch
+                (PlusExp
+                  (Catch Throw (ValExp 10))
+                  (Catch
+                    (PlusExp (ValExp 20) Throw)
+                    (ValExp 30)))
+                (ValExp 40))
+              (Catch
+                (PlusExp Throw
+                  (Catch
+                    (PlusExp (ValExp 50) Throw)
+                    (ValExp 60)))
+                (ValExp 70)) in
+  checkProgram prog
+
+testProgram5 : Bool
+testProgram5 =
+  let prog = Catch
+              (Catch
+                (Catch
+                  (PlusExp
+                    (Catch Throw (ValExp 1))
+                    (Catch Throw (ValExp 2)))
+                  (PlusExp
+                    (Catch Throw (ValExp 3))
+                    (Catch Throw (ValExp 4))))
+                (PlusExp
+                  (Catch Throw (ValExp 5))
+                  (Catch Throw (ValExp 6))))
+              (ValExp 7) in
+  checkProgram prog
