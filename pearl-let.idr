@@ -203,3 +203,14 @@ nestedLetIsSame : Bool
 nestedLetIsSame = let (top |> EmptyStack) = nestedLetExec in 
     nestedLetEval == top
 
+
+{-
+    It is a type error to use an out-of-bounds index.
+    The following example has a let binding nested inside another,
+    but attempts to access variable 2.
+    Uncomment the code to confirm the error.
+
+
+    typeErrorExample : Exp 0
+    typeErrorExample = LetExp (ValExp 2) (LetExp (ValExp 40) (PlusExp (VarExp 0) (VarExp 2)))
+-}
