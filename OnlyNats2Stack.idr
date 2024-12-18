@@ -18,17 +18,17 @@ data Stack : List StackValue -> Nat -> Type where
 
 
 total
-indexStack : (idx : Fin vars) -> (Stack typ vars) -> Nat
-indexStack FZ (_ |> tail) = indexStack FZ tail
-indexStack FZ (hd $> _) = hd
-indexStack (FS next) (_ |> tail) = indexStack (FS next) tail
-indexStack (FS next) (_ $> tail) = indexStack next tail
-
-total
 countSBound : (List StackValue) -> Nat
 countSBound [] = 0
 countSBound (STemp :: tail) = countSBound tail
 countSBound (SBound :: tail) = S (countSBound tail)
+
+total
+indexStack :  (idx : Fin vars) -> (Stack typ vars) -> Nat
+indexStack FZ (_ |> tail) = indexStack FZ tail
+indexStack FZ (hd $> _) = hd
+indexStack (FS next) (_ |> tail) = indexStack (FS next) tail
+indexStack (FS next) (_ $> tail) = indexStack next tail
 
 total
 dropSTemp : List StackValue -> List StackValue
@@ -79,6 +79,51 @@ compile {typ} (LetExp rhs body) = let rhs' = compile rhs in let body' = compile 
     LET rhs' popped
 
 
+indexSkipsPreTemp : indexStack idx (n |> st) = indexStack idx st
+indexSkipsPreTemp {idx = FZ} = Refl
+indexSkipsPreTemp {idx = (FS x)} = Refl
+
+indexSkipsPostTemp : indexStack idx (bound $> n |> st) = indexStack idx (bound $> st)
+indexSkipsPostTemp {idx = FZ} = Refl
+indexSkipsPostTemp {idx = (FS x)} {st} = indexSkipsPreTemp
+
+indexCommutes : indexStack idx (bound $> n |> st) = indexStack idx (n |> bound $> st)
+indexCommutes {idx = FZ} = Refl
+indexCommutes {idx = (FS x)} = indexSkipsPreTemp
+
+stackOrderEquiv : (st : Stack typ (countSBound typ)) -> (bound, temp, val : Nat) ->
+                 eval (val $> bound $> temp |> st) body =
+                 eval (val $> temp |> bound $> st) body
+stackOrderEquiv {body} st bound temp val with (body)
+  stackOrderEquiv st bound temp val | (ValExp x) = Refl
+  stackOrderEquiv st bound temp val | (PlusExp e1 e2) = 
+    let ih1 = stackOrderEquiv st bound temp val {body = e1} in
+    let ih2 = stackOrderEquiv st bound temp val {body = e2} in
+    rewrite ih1 in
+    rewrite ih2 in
+    Refl
+  stackOrderEquiv st bound temp val | (VarExp FZ) = Refl
+  stackOrderEquiv st bound temp val | (VarExp (FS x)) = indexCommutes
+  stackOrderEquiv st bound temp val | (LetExp rhs body') = ?not_done_order_equiv
+
+evalBoundWithTemp : (st : Stack typ (countSBound typ)) ->
+                    (e : Exp (S $ countSBound typ)) ->
+                    (bound : Nat) ->
+                    (temp : Nat) ->
+                    eval (bound $> temp |> st) e = eval (bound $> st) e
+evalBoundWithTemp st (ValExp x) bound temp = Refl
+evalBoundWithTemp st (PlusExp x y) bound temp =
+    rewrite evalBoundWithTemp st x bound temp in
+    rewrite evalBoundWithTemp st y bound temp in
+    Refl
+evalBoundWithTemp st (VarExp idx) bound temp = indexSkipsPostTemp
+evalBoundWithTemp st (LetExp rhs body) bound temp =
+  let rhs' = evalBoundWithTemp st rhs bound temp in
+  let body' = evalBoundWithTemp (bound $> st) body (eval (bound $> st) rhs) temp in
+  rewrite rhs' in
+  rewrite sym body' in
+  stackOrderEquiv st bound temp (eval (bound $> st) rhs)
+
 evalWithTemp : (st: Stack typ (countSBound typ)) ->
               (e: Exp (countSBound typ)) -> (n: Nat) ->
               eval (n |> st) e = eval st e
@@ -88,11 +133,19 @@ evalWithTemp st (PlusExp x y) n =
   rewrite evalWithTemp st x n in
   rewrite evalWithTemp st y n in
   Refl
-evalWithTemp st (VarExp idx) n = evalVar idx st
+evalWithTemp st (VarExp idx) n = indexSkipsPreTemp
+evalWithTemp st (LetExp rhs body) n = evalLet st rhs body n
 where
-  evalVar : (idx : Fin vars) -> (st : Stack typ vars) -> indexStack idx (n |> st) = indexStack idx st
-  evalVar FZ _ = Refl
-  evalVar (FS x) _ = Refl
+  evalLet : (st : Stack typ (countSBound typ)) ->
+            (rhs : Exp (countSBound typ)) ->
+            (body : Exp (S (countSBound typ))) ->
+            (n : Nat) ->
+            eval ((eval (n |> st) rhs) $> (n |> st)) body
+            = eval ((eval st rhs) $> st) body
+  evalLet st rhs body n =
+    let rhs' = evalWithTemp st rhs n in
+    rewrite rhs' in
+    evalBoundWithTemp st body (eval st rhs) n
 
 total
 correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> ((eval st e) |> st) = exec (compile e) st
@@ -110,4 +163,4 @@ correct (LetExp rhs body) st =
   let rhs_val = eval st rhs in
   let ih1 = correct rhs st in
   let ih2 = correct body (rhs_val $> st) in
-  ?blah
+  ?not_done_correct
