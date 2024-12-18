@@ -164,3 +164,42 @@ correct (LetExp rhs body) st =
   let ih1 = correct rhs st in
   let ih2 = correct body (rhs_val $> st) in
   ?not_done_correct
+
+
+-- The let binding goes out of scope
+-- which is why the binding count is 0
+letExample : Exp 0
+letExample = LetExp (ValExp 2) (PlusExp (VarExp 0) (ValExp 40))
+letEval : Nat
+letEval = eval EmptyStack letExample
+
+nestedLetExample : Exp 0
+nestedLetExample = LetExp (ValExp 2) (LetExp (ValExp 40) (PlusExp (VarExp 0) (VarExp 1)))
+nestedLetEval : Nat
+nestedLetEval = eval EmptyStack nestedLetExample
+
+-- Compiling letExample is the same
+-- as the let binding goes out of scope
+letComp : Code [] [STemp]
+letComp = compile letExample
+
+-- Using the REPL we can observe that this
+-- results in ```42 |> EmptyStack``
+letExec : Stack [STemp] 0
+letExec = exec letComp EmptyStack
+
+
+nestedLetComp : Code [] [STemp]
+nestedLetComp = compile nestedLetExample
+
+nestedLetExec : Stack [STemp] 0
+nestedLetExec = exec nestedLetComp EmptyStack
+
+letIsSame : Bool
+letIsSame = let (top |> EmptyStack) = letExec in 
+    letEval == top
+
+nestedLetIsSame : Bool
+nestedLetIsSame = let (top |> EmptyStack) = nestedLetExec in 
+    nestedLetEval == top
+
