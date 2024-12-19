@@ -151,8 +151,8 @@ total
 correct : (e: Exp (countSBound typ)) -> (st: Stack typ (countSBound typ)) -> ((eval st e) |> st) = exec (compile e) st
 correct (ValExp _) st = Refl
 correct (PlusExp e1 e2) st =
-    let temp_eq = sym $ evalWithTemp st e1 (eval st e2) in
     let lhs = correct e1 ((eval st e2) |> st) in
+    let temp_eq = sym $ evalWithTemp st e1 (eval st e2) in
     let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st) in
     let add_eq = cong {f = \st' => exec ADD st'} (trans lhs rhs) in
     let add_temp_right = cong {f = \x => (plus x (eval st e2)) |> st} temp_eq in
