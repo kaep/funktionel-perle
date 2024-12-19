@@ -154,9 +154,9 @@ correct (PlusExp e1 e2) st =
     let temp_eq = sym $ evalWithTemp st e1 (eval st e2) in
     let lhs = correct e1 ((eval st e2) |> st) in
     let rhs = cong {f = \st' => exec (compile e1) st'} (correct e2 st) in
-    let conni = cong {f = \st' => exec ADD st'} (trans lhs rhs) in
-    let step1 = cong {f = \x => (plus x (eval st e2)) |> st} temp_eq in
-    trans step1 conni
+    let add_eq = cong {f = \st' => exec ADD st'} (trans lhs rhs) in
+    let add_temp_right = cong {f = \x => (plus x (eval st e2)) |> st} temp_eq in
+    trans add_temp_right add_eq
 
 correct (VarExp idx) st = Refl
 correct (LetExp rhs body) st =
@@ -202,7 +202,6 @@ letIsSame = let (top |> EmptyStack) = letExec in
 nestedLetIsSame : Bool
 nestedLetIsSame = let (top |> EmptyStack) = nestedLetExec in 
     nestedLetEval == top
-
 
 {-
     It is a type error to use an out-of-bounds index.
